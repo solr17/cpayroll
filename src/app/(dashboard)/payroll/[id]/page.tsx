@@ -218,6 +218,19 @@ export default function PayRunDetailPage() {
   // Variable items state for Step 1
   const [variableItems, setVariableItems] = useState<Record<string, VariableItems>>({});
 
+  // Employees for draft step (loaded separately since payslips don't exist yet)
+  const [draftEmployees, setDraftEmployees] = useState<
+    {
+      id: string;
+      fullName: string;
+      nricLast4: string;
+      citizenshipStatus: string;
+      department: string | null;
+      position: string | null;
+      basicSalaryCents: number;
+    }[]
+  >([]);
+
   // Expanded payslip rows for review
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
@@ -247,9 +260,50 @@ export default function PayRunDetailPage() {
     }
   }, [id]);
 
+  // Load employees for draft state (before payslips exist)
+  const loadEmployees = useCallback(async () => {
+    try {
+      const [empRes] = await Promise.all([fetch("/api/employees")]);
+      const empData = await empRes.json();
+      if (empData.success) {
+        // Fetch salary info for each employee
+        const empsWithSalary = await Promise.all(
+          empData.data.map(
+            async (emp: {
+              id: string;
+              fullName: string;
+              nricLast4: string;
+              citizenshipStatus: string;
+              department: string | null;
+              position: string | null;
+            }) => {
+              const salRes = await fetch(`/api/salary?employeeId=${emp.id}`);
+              const salData = await salRes.json();
+              const latestSalary =
+                salData.success && salData.data.length > 0 ? salData.data[0] : null;
+              return {
+                id: emp.id,
+                fullName: emp.fullName,
+                nricLast4: emp.nricLast4,
+                citizenshipStatus: emp.citizenshipStatus,
+                department: emp.department,
+                position: emp.position,
+                basicSalaryCents: latestSalary?.basicSalaryCents ?? 0,
+              };
+            },
+          ),
+        );
+        setDraftEmployees(empsWithSalary);
+      }
+    } catch {
+      // Silently fail — employees tab will be empty
+    }
+  }, []);
+
   useEffect(() => {
     loadPayRun();
-  }, [loadPayRun]);
+    loadEmployees();
+  }, [loadPayRun, loadEmployees]);
 
   // -------------------------------------------------------------------------
   // Variable items helpers (Step 1)
@@ -500,6 +554,7 @@ export default function PayRunDetailPage() {
       {payRun.status === "draft" && (
         <EnterDataStep
           payslips={payRun.payslips}
+          draftEmployees={draftEmployees}
           getVariable={getVariable}
           setVariable={setVariable}
           onCalculate={handleCalculate}
@@ -583,138 +638,163 @@ export default function PayRunDetailPage() {
 
 function EnterDataStep({
   payslips,
+  draftEmployees,
   getVariable,
   setVariable,
   onCalculate,
   loading,
 }: {
   payslips: PayslipRow[];
+  draftEmployees: {
+    id: string;
+    fullName: string;
+    nricLast4: string;
+    citizenshipStatus: string;
+    department: string | null;
+    position: string | null;
+    basicSalaryCents: number;
+  }[];
   getVariable: (employeeId: string, field: keyof VariableItems) => string;
   setVariable: (employeeId: string, field: keyof VariableItems, value: string) => void;
   onCalculate: () => void;
   loading: boolean;
 }) {
-  // For draft pay runs, payslips may be empty (employees listed from the pay run context).
-  // We show a table of employees from the payslips array with input fields.
+  // Build a unified employee list: use payslips if available (recalculation), otherwise use draftEmployees
+  const rows =
+    payslips.length > 0
+      ? payslips.map((row) => ({
+          id: row.payslip.id,
+          name: row.employeeName,
+          nricLast4: row.nricLast4,
+          citizenship: row.citizenshipStatus,
+          salaryCents: row.payslip.basicSalaryCents,
+        }))
+      : draftEmployees.map((emp) => ({
+          id: emp.id,
+          name: emp.fullName,
+          nricLast4: emp.nricLast4,
+          citizenship: emp.citizenshipStatus,
+          salaryCents: emp.basicSalaryCents,
+        }));
 
-  if (payslips.length === 0) {
+  if (rows.length === 0) {
     return (
       <Card>
-        <p className="text-sm text-gray-500">
-          No employees found for this pay run. Ensure employees are active for the pay period.
-        </p>
+        <div className="flex flex-col items-center py-8 text-center">
+          <Spinner className="mb-4 h-6 w-6 text-slate-400" />
+          <p className="text-sm text-slate-500">Loading employees...</p>
+        </div>
       </Card>
     );
   }
 
+  const inputClass =
+    "w-20 rounded border border-slate-200 px-2 py-1.5 text-center text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 focus:outline-none";
+  const inputClassWide =
+    "w-24 rounded border border-slate-200 px-2 py-1.5 text-center text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 focus:outline-none";
+
   return (
     <div>
       <Card title="Variable Pay Items">
-        <p className="mb-4 text-sm text-gray-500">
-          Enter variable pay items for each employee. Leave blank for zero. Dollar amounts will be
-          converted to cents automatically.
+        <p className="mb-4 text-sm text-slate-500">
+          Enter overtime, bonuses, and other variable items for each employee. Leave blank for zero.
         </p>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-slate-200 text-sm">
+            <thead className="bg-slate-50">
               <tr>
-                <th className="px-3 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase">
+                <th className="px-3 py-3 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase">
                   Employee
                 </th>
-                <th className="px-3 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase">
+                <th className="px-3 py-3 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase">
                   Basic Salary
                 </th>
-                <th className="px-3 py-3 text-center text-xs font-medium tracking-wide text-gray-500 uppercase">
+                <th className="px-3 py-3 text-center text-xs font-semibold tracking-wide text-slate-500 uppercase">
                   OT Hours
                 </th>
-                <th className="px-3 py-3 text-center text-xs font-medium tracking-wide text-gray-500 uppercase">
+                <th className="px-3 py-3 text-center text-xs font-semibold tracking-wide text-slate-500 uppercase">
                   Bonus ($)
                 </th>
-                <th className="px-3 py-3 text-center text-xs font-medium tracking-wide text-gray-500 uppercase">
+                <th className="px-3 py-3 text-center text-xs font-semibold tracking-wide text-slate-500 uppercase">
                   Commission ($)
                 </th>
-                <th className="px-3 py-3 text-center text-xs font-medium tracking-wide text-gray-500 uppercase">
+                <th className="px-3 py-3 text-center text-xs font-semibold tracking-wide text-slate-500 uppercase">
                   AWS ($)
                 </th>
-                <th className="px-3 py-3 text-center text-xs font-medium tracking-wide text-gray-500 uppercase">
-                  Unpaid Leave Days
+                <th className="px-3 py-3 text-center text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                  Unpaid Leave
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
-              {payslips.map((row) => {
-                // We need an employee ID. Payslips in draft may have employeeId on the payslip.
-                // Use payslip.id as key and derive employee from the row.
-                const empId = row.payslip.id;
-                return (
-                  <tr key={empId} className="hover:bg-gray-50">
-                    <td className="px-3 py-3">
-                      <div className="font-medium text-gray-900">{row.employeeName}</div>
-                      <div className="text-xs text-gray-500">
-                        ****{row.nricLast4} &middot; {row.citizenshipStatus}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 font-mono text-sm">
-                      {centsToCurrency(row.payslip.basicSalaryCents)}
-                    </td>
-                    <td className="px-3 py-3">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.5"
-                        placeholder="0"
-                        value={getVariable(empId, "otHours")}
-                        onChange={(e) => setVariable(empId, "otHours", e.target.value)}
-                        className="w-20 rounded border border-gray-300 px-2 py-1 text-center text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                      />
-                    </td>
-                    <td className="px-3 py-3">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={getVariable(empId, "bonusCents")}
-                        onChange={(e) => setVariable(empId, "bonusCents", e.target.value)}
-                        className="w-24 rounded border border-gray-300 px-2 py-1 text-center text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                      />
-                    </td>
-                    <td className="px-3 py-3">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={getVariable(empId, "commissionCents")}
-                        onChange={(e) => setVariable(empId, "commissionCents", e.target.value)}
-                        className="w-24 rounded border border-gray-300 px-2 py-1 text-center text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                      />
-                    </td>
-                    <td className="px-3 py-3">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={getVariable(empId, "awsCents")}
-                        onChange={(e) => setVariable(empId, "awsCents", e.target.value)}
-                        className="w-24 rounded border border-gray-300 px-2 py-1 text-center text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                      />
-                    </td>
-                    <td className="px-3 py-3">
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        placeholder="0"
-                        value={getVariable(empId, "unpaidLeaveDays")}
-                        onChange={(e) => setVariable(empId, "unpaidLeaveDays", e.target.value)}
-                        className="w-20 rounded border border-gray-300 px-2 py-1 text-center text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {rows.map((row) => (
+                <tr key={row.id} className="hover:bg-sky-50/30">
+                  <td className="px-3 py-3">
+                    <div className="font-medium text-slate-900">{row.name}</div>
+                    <div className="text-xs text-slate-400">
+                      ****{row.nricLast4} &middot; {row.citizenship}
+                    </div>
+                  </td>
+                  <td className="tabular px-3 py-3 font-mono text-sm">
+                    {centsToCurrency(row.salaryCents)}
+                  </td>
+                  <td className="px-3 py-3">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      placeholder="0"
+                      value={getVariable(row.id, "otHours")}
+                      onChange={(e) => setVariable(row.id, "otHours", e.target.value)}
+                      className={inputClass}
+                    />
+                  </td>
+                  <td className="px-3 py-3">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={getVariable(row.id, "bonusCents")}
+                      onChange={(e) => setVariable(row.id, "bonusCents", e.target.value)}
+                      className={inputClassWide}
+                    />
+                  </td>
+                  <td className="px-3 py-3">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={getVariable(row.id, "commissionCents")}
+                      onChange={(e) => setVariable(row.id, "commissionCents", e.target.value)}
+                      className={inputClassWide}
+                    />
+                  </td>
+                  <td className="px-3 py-3">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={getVariable(row.id, "awsCents")}
+                      onChange={(e) => setVariable(row.id, "awsCents", e.target.value)}
+                      className={inputClassWide}
+                    />
+                  </td>
+                  <td className="px-3 py-3">
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="0"
+                      value={getVariable(row.id, "unpaidLeaveDays")}
+                      onChange={(e) => setVariable(row.id, "unpaidLeaveDays", e.target.value)}
+                      className={inputClass}
+                    />
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

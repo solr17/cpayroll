@@ -1,8 +1,7 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 import * as schema from "./schema";
 
 // Use PGlite for local development, Neon for production
-let db: ReturnType<typeof createDb>;
-
 function createDb() {
   if (process.env.DATABASE_URL) {
     // Production: use Neon serverless
@@ -19,6 +18,6 @@ function createDb() {
   }
 }
 
-db = createDb();
+const db = createDb();
 
 export { db };

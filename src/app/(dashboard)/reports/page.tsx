@@ -4,6 +4,11 @@ import { useCallback, useState } from "react";
 import { Card, Button, Modal, PageHeader, EmptyState, Table, Select } from "@/components/ui";
 import { centsToCurrency } from "@/lib/utils/money";
 
+/** Safe currency formatting — coerces to number to prevent NaN from string values */
+function money(cents: unknown): string {
+  return centsToCurrency(Number(cents) || 0);
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -51,10 +56,6 @@ interface PayRun {
   totalEmployeeCpfCents: number | null;
   totalSdlCents: number | null;
   totalFwlCents: number | null;
-}
-
-interface PayRunWithPayslips extends PayRun {
-  payslips: Payslip[];
 }
 
 type ReportType =
@@ -212,13 +213,13 @@ function generatePayrollDetail(payslips: Payslip[]): { headers: string[]; rows: 
     const totalDeductions = (ps.deductionsJson ?? []).reduce((s, d) => s + d.amountCents, 0);
     return {
       Employee: ps.employeeName ?? ps.employeeId,
-      Basic: centsToCurrency(ps.basicSalaryCents),
-      Allowances: centsToCurrency(totalAllowances),
-      "OT Pay": centsToCurrency(ps.otPayCents ?? 0),
-      Gross: centsToCurrency(ps.grossPayCents),
-      "Employee CPF": centsToCurrency(ps.employeeCpfCents),
-      Deductions: centsToCurrency(totalDeductions),
-      "Net Pay": centsToCurrency(ps.netPayCents),
+      Basic: money(ps.basicSalaryCents),
+      Allowances: money(totalAllowances),
+      "OT Pay": money(ps.otPayCents ?? 0),
+      Gross: money(ps.grossPayCents),
+      "Employee CPF": money(ps.employeeCpfCents),
+      Deductions: money(totalDeductions),
+      "Net Pay": money(ps.netPayCents),
     };
   });
   return { headers, rows };
@@ -242,20 +243,20 @@ function generatePayrollSummary(payslips: Payslip[]): { headers: string[]; rows:
     const dept = ps.department ?? "Unassigned";
     const current = deptMap.get(dept) ?? { count: 0, gross: 0, empCpf: 0, erCpf: 0, net: 0 };
     current.count += 1;
-    current.gross += ps.grossPayCents;
-    current.empCpf += ps.employeeCpfCents;
-    current.erCpf += ps.employerCpfCents;
-    current.net += ps.netPayCents;
+    current.gross += Number(ps.grossPayCents) || 0;
+    current.empCpf += Number(ps.employeeCpfCents) || 0;
+    current.erCpf += Number(ps.employerCpfCents) || 0;
+    current.net += Number(ps.netPayCents) || 0;
     deptMap.set(dept, current);
   }
 
   const rows: ReportRow[] = Array.from(deptMap.entries()).map(([dept, data]) => ({
     Department: dept,
     Headcount: data.count,
-    "Total Gross": centsToCurrency(data.gross),
-    "Total Employee CPF": centsToCurrency(data.empCpf),
-    "Total Employer CPF": centsToCurrency(data.erCpf),
-    "Total Net Pay": centsToCurrency(data.net),
+    "Total Gross": money(data.gross),
+    "Total Employee CPF": money(data.empCpf),
+    "Total Employer CPF": money(data.erCpf),
+    "Total Net Pay": money(data.net),
   }));
   return { headers, rows };
 }
@@ -264,9 +265,9 @@ function generateCpfContribution(payslips: Payslip[]): { headers: string[]; rows
   const headers = ["Employee", "Employer CPF", "Employee CPF", "Total CPF"];
   const rows: ReportRow[] = payslips.map((ps) => ({
     Employee: ps.employeeName ?? ps.employeeId,
-    "Employer CPF": centsToCurrency(ps.employerCpfCents),
-    "Employee CPF": centsToCurrency(ps.employeeCpfCents),
-    "Total CPF": centsToCurrency(ps.employerCpfCents + ps.employeeCpfCents),
+    "Employer CPF": money(ps.employerCpfCents),
+    "Employee CPF": money(ps.employeeCpfCents),
+    "Total CPF": money((Number(ps.employerCpfCents) || 0) + (Number(ps.employeeCpfCents) || 0)),
   }));
   return { headers, rows };
 }
@@ -278,12 +279,15 @@ function generateStatutoryContribution(payslips: Payslip[]): {
   const headers = ["Employee", "Employer CPF", "Employee CPF", "SDL", "FWL", "Total Statutory"];
   const rows: ReportRow[] = payslips.map((ps) => ({
     Employee: ps.employeeName ?? ps.employeeId,
-    "Employer CPF": centsToCurrency(ps.employerCpfCents),
-    "Employee CPF": centsToCurrency(ps.employeeCpfCents),
-    SDL: centsToCurrency(ps.sdlCents),
-    FWL: centsToCurrency(ps.fwlCents),
-    "Total Statutory": centsToCurrency(
-      ps.employerCpfCents + ps.employeeCpfCents + ps.sdlCents + ps.fwlCents,
+    "Employer CPF": money(ps.employerCpfCents),
+    "Employee CPF": money(ps.employeeCpfCents),
+    SDL: money(ps.sdlCents),
+    FWL: money(ps.fwlCents),
+    "Total Statutory": money(
+      (Number(ps.employerCpfCents) || 0) +
+        (Number(ps.employeeCpfCents) || 0) +
+        (Number(ps.sdlCents) || 0) +
+        (Number(ps.fwlCents) || 0),
     ),
   }));
   return { headers, rows };
@@ -297,14 +301,14 @@ function generateBankListing(payslips: Payslip[]): { headers: string[]; rows: Re
     const bank = ps.bankName ?? "Unknown";
     const current = bankMap.get(bank) ?? { count: 0, totalNet: 0 };
     current.count += 1;
-    current.totalNet += ps.netPayCents;
+    current.totalNet += Number(ps.netPayCents) || 0;
     bankMap.set(bank, current);
   }
 
   const rows: ReportRow[] = Array.from(bankMap.entries()).map(([bank, data]) => ({
     Bank: bank,
     "Employee Count": data.count,
-    "Total Net Pay": centsToCurrency(data.totalNet),
+    "Total Net Pay": money(data.totalNet),
   }));
   return { headers, rows };
 }
@@ -333,21 +337,21 @@ function generateYtdSummary(allPayslips: Payslip[]): { headers: string[]; rows: 
       sdl: 0,
       net: 0,
     };
-    current.gross += ps.grossPayCents;
-    current.empCpf += ps.employeeCpfCents;
-    current.erCpf += ps.employerCpfCents;
-    current.sdl += ps.sdlCents;
-    current.net += ps.netPayCents;
+    current.gross += Number(ps.grossPayCents) || 0;
+    current.empCpf += Number(ps.employeeCpfCents) || 0;
+    current.erCpf += Number(ps.employerCpfCents) || 0;
+    current.sdl += Number(ps.sdlCents) || 0;
+    current.net += Number(ps.netPayCents) || 0;
     empMap.set(key, current);
   }
 
   const rows: ReportRow[] = Array.from(empMap.values()).map((data) => ({
     Employee: data.name,
-    "Total Gross": centsToCurrency(data.gross),
-    "Total Employee CPF": centsToCurrency(data.empCpf),
-    "Total Employer CPF": centsToCurrency(data.erCpf),
-    "Total SDL": centsToCurrency(data.sdl),
-    "Total Net Pay": centsToCurrency(data.net),
+    "Total Gross": money(data.gross),
+    "Total Employee CPF": money(data.empCpf),
+    "Total Employer CPF": money(data.erCpf),
+    "Total SDL": money(data.sdl),
+    "Total Net Pay": money(data.net),
   }));
   return { headers, rows };
 }
@@ -373,16 +377,18 @@ function generateVarianceReport(
 
   const rows: ReportRow[] = currentPayslips.map((ps) => {
     const prev = prevMap.get(ps.employeeId);
-    const prevGross = prev?.grossPayCents ?? 0;
-    const prevNet = prev?.netPayCents ?? 0;
+    const prevGross = Number(prev?.grossPayCents) || 0;
+    const prevNet = Number(prev?.netPayCents) || 0;
+    const curGross = Number(ps.grossPayCents) || 0;
+    const curNet = Number(ps.netPayCents) || 0;
     return {
       Employee: ps.employeeName ?? ps.employeeId,
-      "Current Gross": centsToCurrency(ps.grossPayCents),
-      "Previous Gross": prev ? centsToCurrency(prevGross) : "N/A",
-      Variance: prev ? centsToCurrency(ps.grossPayCents - prevGross) : "New",
-      "Current Net": centsToCurrency(ps.netPayCents),
-      "Previous Net": prev ? centsToCurrency(prevNet) : "N/A",
-      "Net Variance": prev ? centsToCurrency(ps.netPayCents - prevNet) : "New",
+      "Current Gross": money(curGross),
+      "Previous Gross": prev ? money(prevGross) : "N/A",
+      Variance: prev ? money(curGross - prevGross) : "New",
+      "Current Net": money(curNet),
+      "Previous Net": prev ? money(prevNet) : "N/A",
+      "Net Variance": prev ? money(curNet - prevNet) : "New",
     };
   });
   return { headers, rows };
@@ -435,9 +441,9 @@ function generateReconciliation(
     const isCurrency = m.label !== "Headcount";
     return {
       Metric: m.label,
-      "Current Month": isCurrency ? centsToCurrency(m.current) : String(m.current),
-      "Previous Month": isCurrency ? centsToCurrency(m.previous) : String(m.previous),
-      Change: isCurrency ? centsToCurrency(m.current - m.previous) : String(m.current - m.previous),
+      "Current Month": isCurrency ? money(m.current) : String(m.current),
+      "Previous Month": isCurrency ? money(m.previous) : String(m.previous),
+      Change: isCurrency ? money(m.current - m.previous) : String(m.current - m.previous),
     };
   });
   return { headers, rows };
@@ -497,8 +503,36 @@ export default function ReportsPage() {
     const res = await fetch(`/api/payroll/pay-runs/${payRunId}`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error ?? "Failed to fetch payslips");
-    const runData = data.data as PayRunWithPayslips;
-    return runData.payslips ?? [];
+    const runData = data.data;
+    // API returns { payslip: {...}, employeeName, nricLast4, department, ... }[]
+    // Flatten into Payslip[] with numeric coercion for safety
+    const rawSlips = runData.payslips ?? [];
+    return rawSlips.map(
+      (row: {
+        payslip: Record<string, unknown>;
+        employeeName: string;
+        nricLast4: string;
+        department: string | null;
+      }) => ({
+        id: String(row.payslip.id ?? ""),
+        employeeId: String(row.payslip.employeeId ?? ""),
+        basicSalaryCents: Number(row.payslip.basicSalaryCents ?? 0),
+        grossPayCents: Number(row.payslip.grossPayCents ?? 0),
+        netPayCents: Number(row.payslip.netPayCents ?? 0),
+        employerCpfCents: Number(row.payslip.employerCpfCents ?? 0),
+        employeeCpfCents: Number(row.payslip.employeeCpfCents ?? 0),
+        sdlCents: Number(row.payslip.sdlCents ?? 0),
+        fwlCents: Number(row.payslip.fwlCents ?? 0),
+        otPayCents: row.payslip.otPayCents != null ? Number(row.payslip.otPayCents) : null,
+        otHours: row.payslip.otHours != null ? String(row.payslip.otHours) : null,
+        proratedDays: row.payslip.proratedDays != null ? String(row.payslip.proratedDays) : null,
+        allowancesJson: (row.payslip.allowancesJson as AllowanceItem[] | null) ?? null,
+        deductionsJson: (row.payslip.deductionsJson as DeductionItem[] | null) ?? null,
+        employerTotalCostCents: Number(row.payslip.employerTotalCostCents ?? 0),
+        employeeName: row.employeeName,
+        department: row.department,
+      }),
+    );
   }, []);
 
   // Fetch payslips for all runs in a period
@@ -609,20 +643,14 @@ export default function ReportsPage() {
       setReportTitle(`${selectedReport.name} — ${periodLabel}`);
       setReportHeaders(result.headers);
       setReportRows(result.rows);
-      closeModal();
+      setModalOpen(false);
+      setSelectedReport(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate report");
     } finally {
       setLoading(false);
     }
-  }, [
-    selectedReport,
-    selectedYear,
-    selectedMonth,
-    fetchAllPayslipsForPeriod,
-    getPreviousMonth,
-    closeModal,
-  ]);
+  }, [selectedReport, selectedYear, selectedMonth, fetchAllPayslipsForPeriod, getPreviousMonth]);
 
   const handleExportCsv = useCallback(() => {
     if (reportHeaders.length === 0 || reportRows.length === 0) return;
