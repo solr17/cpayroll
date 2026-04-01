@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c ':*)",
+      "Bash(python -c ':*)",
+      "Bash(where python3:*)",
+      "Bash(where python:*)",
+      "Bash(where py:*)",
+      "Bash(py -c ':*)",
+      "Bash(npm --version)",
+      "Bash(npx --version)",
+      "Bash(pnpm --version)",
+      "Bash(git --version)",
+      "Bash(docker --version)",
+      "Bash(psql --version)",
+      "Bash(redis-cli --version)",
+      "Bash(npx vitest:*)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}
