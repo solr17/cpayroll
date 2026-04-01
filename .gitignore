@@ -37,6 +37,9 @@ coverage/
 # drizzle
 drizzle/meta/
 
+# local database
+data/
+
 # generated
 *.tsbuildinfo
 next-env.d.ts

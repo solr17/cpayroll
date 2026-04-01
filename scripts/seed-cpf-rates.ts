@@ -13,20 +13,80 @@ async function seed() {
 
   // 2025 SC / PR 3rd Year+ rates
   const rates2025 = [
-    { ageBandMin: 0, ageBandMax: 55, employerRate: "0.1700", employeeRate: "0.2000", totalRate: "0.3700" },
-    { ageBandMin: 56, ageBandMax: 60, employerRate: "0.1550", employeeRate: "0.1700", totalRate: "0.3250" },
-    { ageBandMin: 61, ageBandMax: 65, employerRate: "0.1200", employeeRate: "0.1150", totalRate: "0.2350" },
-    { ageBandMin: 66, ageBandMax: 70, employerRate: "0.0900", employeeRate: "0.0750", totalRate: "0.1650" },
-    { ageBandMin: 71, ageBandMax: 999, employerRate: "0.0750", employeeRate: "0.0500", totalRate: "0.1250" },
+    {
+      ageBandMin: 0,
+      ageBandMax: 55,
+      employerRate: "0.1700",
+      employeeRate: "0.2000",
+      totalRate: "0.3700",
+    },
+    {
+      ageBandMin: 56,
+      ageBandMax: 60,
+      employerRate: "0.1550",
+      employeeRate: "0.1700",
+      totalRate: "0.3250",
+    },
+    {
+      ageBandMin: 61,
+      ageBandMax: 65,
+      employerRate: "0.1200",
+      employeeRate: "0.1150",
+      totalRate: "0.2350",
+    },
+    {
+      ageBandMin: 66,
+      ageBandMax: 70,
+      employerRate: "0.0900",
+      employeeRate: "0.0750",
+      totalRate: "0.1650",
+    },
+    {
+      ageBandMin: 71,
+      ageBandMax: 999,
+      employerRate: "0.0750",
+      employeeRate: "0.0500",
+      totalRate: "0.1250",
+    },
   ];
 
   // 2026 SC / PR 3rd Year+ rates (with changes for 55-65 bands)
   const rates2026 = [
-    { ageBandMin: 0, ageBandMax: 55, employerRate: "0.1700", employeeRate: "0.2000", totalRate: "0.3700" },
-    { ageBandMin: 56, ageBandMax: 60, employerRate: "0.1600", employeeRate: "0.1800", totalRate: "0.3400" },
-    { ageBandMin: 61, ageBandMax: 65, employerRate: "0.1250", employeeRate: "0.1250", totalRate: "0.2500" },
-    { ageBandMin: 66, ageBandMax: 70, employerRate: "0.0900", employeeRate: "0.0750", totalRate: "0.1650" },
-    { ageBandMin: 71, ageBandMax: 999, employerRate: "0.0750", employeeRate: "0.0500", totalRate: "0.1250" },
+    {
+      ageBandMin: 0,
+      ageBandMax: 55,
+      employerRate: "0.1700",
+      employeeRate: "0.2000",
+      totalRate: "0.3700",
+    },
+    {
+      ageBandMin: 56,
+      ageBandMax: 60,
+      employerRate: "0.1600",
+      employeeRate: "0.1800",
+      totalRate: "0.3400",
+    },
+    {
+      ageBandMin: 61,
+      ageBandMax: 65,
+      employerRate: "0.1250",
+      employeeRate: "0.1250",
+      totalRate: "0.2500",
+    },
+    {
+      ageBandMin: 66,
+      ageBandMax: 70,
+      employerRate: "0.0900",
+      employeeRate: "0.0750",
+      totalRate: "0.1650",
+    },
+    {
+      ageBandMin: 71,
+      ageBandMax: 999,
+      employerRate: "0.0750",
+      employeeRate: "0.0500",
+      totalRate: "0.1250",
+    },
   ];
 
   const statusTypes = ["SC", "PR3"] as const;

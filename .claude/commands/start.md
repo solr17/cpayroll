@@ -1,6 +1,7 @@
 # /start — Begin ClinicPay work session
 
 ## Current State
+
 - Branch: !`git branch --show-current`
 - Status: !`git status --short`
 - Last 3 commits: !`git log --oneline -3 2>/dev/null || echo "No commits yet"`
@@ -12,6 +13,7 @@ Read CLAUDE.md. Check for uncommitted changes — if dirty, stash or continue ba
 Ask: **"What are we working on today?"**
 
 Classify the response:
+
 - **Payroll engine** (CPF/SDL/FWL/gross/net) → HIGH RISK. Remind: test-first, integer cents.
 - **Database migration** → HIGH RISK. Remind: backup, no-drop-financial-data.
 - **Security/auth** → HIGH RISK. Remind: PDPA, audit trail.

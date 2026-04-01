@@ -32,24 +32,16 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (!user) {
-      return NextResponse.json(
-        { success: false, error: "Invalid credentials" },
-        { status: 401 },
-      );
+      return NextResponse.json({ success: false, error: "Invalid credentials" }, { status: 401 });
     }
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
-      return NextResponse.json(
-        { success: false, error: "Invalid credentials" },
-        { status: 401 },
-      );
+      return NextResponse.json({ success: false, error: "Invalid credentials" }, { status: 401 });
     }
 
     // Simple session token for MVP
-    const sessionToken = Buffer.from(
-      JSON.stringify({ userId: user.id }),
-    ).toString("base64");
+    const sessionToken = Buffer.from(JSON.stringify({ userId: user.id })).toString("base64");
 
     await logAudit({
       userId: user.id,
@@ -75,9 +67,6 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch {
-    return NextResponse.json(
-      { success: false, error: "Internal server error" },
-      { status: 500 },
-    );
+    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }

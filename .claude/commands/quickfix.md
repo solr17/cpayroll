@@ -1,6 +1,7 @@
 # /quickfix — Fast bug fix (auto-proceed)
 
 ## Current State
+
 - Branch: !`git branch --show-current`
 - Status: !`git status --short`
 
@@ -21,6 +22,7 @@ Auto-proceed through everything. No confirmation prompts.
 10. **Commit**: `fix(<scope>): <what>`
 
 For FINANCIAL bugs also:
+
 - Verify against CPF Board calculator logic.
 - Add edge case to tests/fixtures/.
 - Search for same pattern elsewhere.

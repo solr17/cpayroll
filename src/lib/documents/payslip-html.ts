@@ -1,0 +1,141 @@
+/**
+ * HTML Payslip Template — Employment Act Part 12 compliant.
+ * All required fields: employer name, employee name, masked NRIC, payment date,
+ * salary period, basic salary, allowances, deductions, OT, net salary, payment mode.
+ */
+
+import { centsToCurrency } from "@/lib/utils/money";
+import type { PayrollAllowance, PayrollDeduction } from "@/lib/payroll/types";
+
+interface PayslipData {
+  companyName: string;
+  companyUen: string;
+  employeeName: string;
+  nricLast4: string;
+  paymentDate: string;
+  periodStart: string;
+  periodEnd: string;
+  basicSalaryCents: number;
+  proratedDays: string | null;
+  allowances: PayrollAllowance[];
+  deductions: PayrollDeduction[];
+  otHours: number;
+  otPayCents: number;
+  bonusCents: number;
+  commissionCents: number;
+  awsCents: number;
+  employeeCpfCents: number;
+  employerCpfCents: number;
+  sdlCents: number;
+  grossPayCents: number;
+  netPayCents: number;
+}
+
+export function generatePayslipHtml(data: PayslipData): string {
+  const allowanceRows = data.allowances
+    .filter((a) => a.amountCents > 0)
+    .map(
+      (a) => `<tr><td>${a.name}</td><td class="amount">${centsToCurrency(a.amountCents)}</td></tr>`,
+    )
+    .join("");
+
+  const deductionRows = data.deductions
+    .filter((d) => d.amountCents > 0)
+    .map(
+      (d) => `<tr><td>${d.name}</td><td class="amount">${centsToCurrency(d.amountCents)}</td></tr>`,
+    )
+    .join("");
+
+  const additionalPayRows = [
+    data.bonusCents > 0
+      ? `<tr><td>Bonus</td><td class="amount">${centsToCurrency(data.bonusCents)}</td></tr>`
+      : "",
+    data.commissionCents > 0
+      ? `<tr><td>Commission</td><td class="amount">${centsToCurrency(data.commissionCents)}</td></tr>`
+      : "",
+    data.awsCents > 0
+      ? `<tr><td>AWS / 13th Month</td><td class="amount">${centsToCurrency(data.awsCents)}</td></tr>`
+      : "",
+    data.otHours > 0
+      ? `<tr><td>Overtime (${data.otHours} hrs)</td><td class="amount">${centsToCurrency(data.otPayCents)}</td></tr>`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("");
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  body { font-family: Arial, sans-serif; font-size: 12px; margin: 40px; color: #333; }
+  h1 { font-size: 18px; margin-bottom: 4px; }
+  .header { display: flex; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+  .section { margin-bottom: 16px; }
+  .section h2 { font-size: 13px; background: #f0f0f0; padding: 6px 10px; margin: 0 0 8px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 4px 10px; }
+  .amount { text-align: right; font-family: monospace; }
+  .total-row { border-top: 1px solid #999; font-weight: bold; }
+  .grand-total { border-top: 2px solid #333; font-size: 14px; font-weight: bold; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; }
+  .info-grid dt { color: #666; }
+  .info-grid dd { margin: 0; font-weight: 500; }
+  .footer { margin-top: 30px; font-size: 10px; color: #999; border-top: 1px solid #ddd; padding-top: 10px; }
+</style></head><body>
+
+<div class="header">
+  <div>
+    <h1>PAYSLIP</h1>
+    <p>${data.companyName} (${data.companyUen})</p>
+  </div>
+  <div style="text-align:right">
+    <p><strong>Payment Date:</strong> ${data.paymentDate}</p>
+    <p><strong>Period:</strong> ${data.periodStart} to ${data.periodEnd}</p>
+  </div>
+</div>
+
+<div class="info-grid" style="margin-bottom:20px">
+  <dt>Employee Name</dt><dd>${data.employeeName}</dd>
+  <dt>NRIC/FIN</dt><dd>\u2022\u2022\u2022\u2022\u2022${data.nricLast4}</dd>
+  <dt>Mode of Payment</dt><dd>Bank Transfer</dd>
+</div>
+
+<div class="section">
+  <h2>Earnings</h2>
+  <table>
+    <tr><td>Basic Salary${data.proratedDays ? ` (pro-rated: ${data.proratedDays} days)` : ""}</td><td class="amount">${centsToCurrency(data.basicSalaryCents)}</td></tr>
+    ${allowanceRows}
+    ${additionalPayRows}
+    <tr class="total-row"><td>Gross Pay</td><td class="amount">${centsToCurrency(data.grossPayCents)}</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h2>Deductions</h2>
+  <table>
+    <tr><td>Employee CPF</td><td class="amount">${centsToCurrency(data.employeeCpfCents)}</td></tr>
+    ${deductionRows}
+    <tr class="total-row"><td>Total Deductions</td><td class="amount">${centsToCurrency(data.employeeCpfCents + data.deductions.reduce((s, d) => s + d.amountCents, 0))}</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <table>
+    <tr class="grand-total"><td>Net Salary Payable</td><td class="amount">${centsToCurrency(data.netPayCents)}</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h2>Employer Contributions (for reference)</h2>
+  <table>
+    <tr><td>Employer CPF</td><td class="amount">${centsToCurrency(data.employerCpfCents)}</td></tr>
+    <tr><td>SDL</td><td class="amount">${centsToCurrency(data.sdlCents)}</td></tr>
+  </table>
+</div>
+
+<div class="footer">
+  This is a computer-generated payslip. No signature is required.<br>
+  Generated by ClinicPay &mdash; ${data.companyName}
+</div>
+
+</body></html>`;
+}

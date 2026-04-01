@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 
 interface EmployeeDetail {
@@ -29,7 +29,12 @@ interface EmployeeDetail {
   contractEndDate: string | null;
   terminationDate: string | null;
   terminationReason: string | null;
-  bankDetails: { bankName: string; branchCode: string; accountNumber: string; payNowLinked?: string } | null;
+  bankDetails: {
+    bankName: string;
+    branchCode: string;
+    accountNumber: string;
+    payNowLinked?: string;
+  } | null;
   cpfAccountNumber: string | null;
   workPassType: string | null;
   workPassExpiry: string | null;
@@ -48,7 +53,6 @@ function Field({ label, value }: { label: string; value: string | null | undefin
 
 export default function EmployeeDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -85,9 +89,16 @@ export default function EmployeeDetailPage() {
           </Link>
           <h1 className="mt-2 text-2xl font-bold">{employee.fullName}</h1>
           <p className="text-sm text-gray-500">
-            NRIC: {employee.nricDisplay} &middot; {employee.status} &middot; {employee.employmentType}
+            NRIC: {employee.nricDisplay} &middot; {employee.status} &middot;{" "}
+            {employee.employmentType}
           </p>
         </div>
+        <Link
+          href={`/employees/${params.id}/edit`}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+        >
+          Edit Employee
+        </Link>
       </div>
 
       <div className="mt-8 space-y-8">

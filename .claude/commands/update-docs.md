@@ -1,6 +1,7 @@
 # /update-docs — Sync documentation with code
 
 ## Current State
+
 - Changed files: !`git diff --name-only HEAD~5 2>/dev/null || git diff --name-only`
 
 ## Instructions
@@ -8,13 +9,14 @@
 Auto-proceed. No confirmation needed.
 
 ### Doc Mapping
-| Code Path | Doc File |
-|-----------|----------|
-| `src/lib/payroll/**` | `docs/cpf-rules.md`, `docs/architecture.md` |
-| `src/app/api/**` | `docs/api.md` |
-| `src/lib/db/schema/**` | `docs/architecture.md` |
-| Docker/deployment configs | `docs/deployment.md` |
-| CPF rate changes | `docs/regulatory.md` |
+
+| Code Path                 | Doc File                                    |
+| ------------------------- | ------------------------------------------- |
+| `src/lib/payroll/**`      | `docs/cpf-rules.md`, `docs/architecture.md` |
+| `src/app/api/**`          | `docs/api.md`                               |
+| `src/lib/db/schema/**`    | `docs/architecture.md`                      |
+| Docker/deployment configs | `docs/deployment.md`                        |
+| CPF rate changes          | `docs/regulatory.md`                        |
 
 1. Scan recent changes (last 5 commits or branch diff).
 2. For each changed file, check mapping above.

@@ -20,6 +20,7 @@ Review all changes: `git diff main...HEAD` (or `git diff HEAD~N` if on main)
 **Money types**: Every monetary value must be integer cents. Search for parseFloat, toFixed, Number() on money. Flag: "You used floating point for money in a payroll system."
 
 **CPF rounding**:
+
 - Total: Math.round() — "Nearest dollar, >= 50 cents up."
 - Employee: Math.floor() — "CRITICAL: Employee share rounds DOWN. Always. You just overcharged an employee."
 - Employer: totalCpf - employeeCpf — "Derived. Not independent."
@@ -51,7 +52,7 @@ Review all changes: `git diff main...HEAD` (or `git diff HEAD~N` if on main)
 
 **Migrations**: DROP COLUMN on financial data? "Where's the backup?"
 **Cascade**: CASCADE DELETE on payslip/CPF/audit? "One delete wipes pay history."
-**Types**: _cents column changed to float? "Read the NEVER rules."
+**Types**: \_cents column changed to float? "Read the NEVER rules."
 **Queries**: N+1? Missing WHERE? Missing transactions?
 
 ## Output

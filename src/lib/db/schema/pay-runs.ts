@@ -1,11 +1,4 @@
-import {
-  pgTable,
-  uuid,
-  date,
-  integer,
-  timestamp,
-  pgEnum,
-} from "drizzle-orm/pg-core";
+import { pgTable, uuid, date, integer, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { companies } from "./companies";
 
 export const payRunStatusEnum = pgEnum("pay_run_status", [

@@ -45,9 +45,9 @@ describe("money utilities", () => {
   describe("multiplyByRate", () => {
     it("rounds down for employee CPF (floor)", () => {
       // S$5,000 * 20% = S$1,000.00 — exact
-      expect(multiplyByRate(500000, 0.20, "floor")).toBe(100000);
+      expect(multiplyByRate(500000, 0.2, "floor")).toBe(100000);
       // S$3,333 * 20% = S$666.60 — floor to S$666
-      expect(multiplyByRate(333300, 0.20, "floor")).toBe(66660);
+      expect(multiplyByRate(333300, 0.2, "floor")).toBe(66660);
     });
 
     it("rounds to nearest for total CPF (round)", () => {

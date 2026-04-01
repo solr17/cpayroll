@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { getAgeBandForMonth, rateChangeEffectiveMonth, daysInMonth, prorationDays } from "@/lib/utils/date";
+import {
+  getAgeBandForMonth,
+  rateChangeEffectiveMonth,
+  daysInMonth,
+  prorationDays,
+} from "@/lib/utils/date";
 
 describe("date utilities", () => {
   describe("getAgeBandForMonth", () => {
@@ -44,10 +49,7 @@ describe("date utilities", () => {
 
   describe("prorationDays", () => {
     it("returns full month for no join/leave", () => {
-      const result = prorationDays(
-        new Date("2026-03-01"),
-        new Date("2026-03-31"),
-      );
+      const result = prorationDays(new Date("2026-03-01"), new Date("2026-03-31"));
       expect(result.daysWorked).toBe(31);
       expect(result.totalDays).toBe(31);
     });

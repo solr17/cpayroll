@@ -15,7 +15,20 @@
       "Bash(psql --version)",
       "Bash(redis-cli --version)",
       "Bash(npx vitest:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(unzip -p ClinicPay_MVP_Spec.docx word/document.xml)",
+      "Bash(npx eslint:*)",
+      "Bash(xargs wc:*)",
+      "Bash(npx neonctl:*)",
+      "Read(//c/Users/admin/**)",
+      "Read(//c/Users/admin/AppData/Roaming/neonctl/**)",
+      "Bash(npm install:*)",
+      "Bash(npm ls:*)",
+      "Bash(npx tsx:*)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(curl:*)",
+      "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_27pOQEUIyxaL@ep-fragrant-wind-a11nylzt-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require\" npx tsx:*)",
+      "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_27pOQEUIyxaL@ep-fragrant-wind-a11nylzt-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require\" NRIC_HMAC_KEY=\"f5ce94da47a6e2754ee2825d4aa3e6ff82fd5892e7467490ed815a4f6f53f39e\" ENCRYPTION_KEY=\"9cf8bc8e947a7c32b7265528ca535b0b898d5afa6cc6538f0020627cfbfd8353\" npx tsx:*)"
     ]
   }
 }

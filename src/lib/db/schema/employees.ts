@@ -1,11 +1,4 @@
-import {
-  pgTable,
-  uuid,
-  text,
-  date,
-  timestamp,
-  pgEnum,
-} from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, date, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { companies } from "./companies";
 
 export const citizenshipStatusEnum = pgEnum("citizenship_status", [
@@ -16,18 +9,9 @@ export const citizenshipStatusEnum = pgEnum("citizenship_status", [
   "FW",
 ]);
 
-export const employmentTypeEnum = pgEnum("employment_type", [
-  "FT",
-  "PT",
-  "CONTRACT",
-  "LOCUM",
-]);
+export const employmentTypeEnum = pgEnum("employment_type", ["FT", "PT", "CONTRACT", "LOCUM"]);
 
-export const employeeStatusEnum = pgEnum("employee_status", [
-  "active",
-  "probation",
-  "terminated",
-]);
+export const employeeStatusEnum = pgEnum("employee_status", ["active", "probation", "terminated"]);
 
 export const employees = pgTable("employees", {
   id: uuid("id").defaultRandom().primaryKey(),

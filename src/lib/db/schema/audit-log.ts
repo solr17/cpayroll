@@ -1,12 +1,4 @@
-import {
-  pgTable,
-  bigserial,
-  uuid,
-  text,
-  jsonb,
-  timestamp,
-  inet,
-} from "drizzle-orm/pg-core";
+import { pgTable, bigserial, uuid, text, jsonb, timestamp } from "drizzle-orm/pg-core";
 
 // APPEND-ONLY: No UPDATE or DELETE operations on this table. Ever.
 export const auditLog = pgTable("audit_log", {

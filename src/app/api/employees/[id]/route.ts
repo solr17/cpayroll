@@ -10,10 +10,7 @@ import { maskNric } from "@/lib/crypto/nric";
 import type { ApiResponse, BankDetails } from "@/types";
 
 /** GET /api/employees/:id — Get employee detail */
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await requireRole("owner", "admin");
     const { id } = await params;
@@ -53,10 +50,7 @@ export async function GET(
 }
 
 /** PATCH /api/employees/:id — Update employee */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await requireRole("owner", "admin");
     const { id } = await params;
@@ -65,7 +59,10 @@ export async function PATCH(
 
     if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: parsed.error.issues[0]?.message ?? "Validation failed" } satisfies ApiResponse,
+        {
+          success: false,
+          error: parsed.error.issues[0]?.message ?? "Validation failed",
+        } satisfies ApiResponse,
         { status: 400 },
       );
     }
@@ -92,13 +89,16 @@ export async function PATCH(
     if (input.dob !== undefined) updateData.dob = input.dob;
     if (input.gender !== undefined) updateData.gender = input.gender;
     if (input.nationality !== undefined) updateData.nationality = input.nationality;
-    if (input.citizenshipStatus !== undefined) updateData.citizenshipStatus = input.citizenshipStatus;
+    if (input.citizenshipStatus !== undefined)
+      updateData.citizenshipStatus = input.citizenshipStatus;
     if (input.prEffectiveDate !== undefined) updateData.prEffectiveDate = input.prEffectiveDate;
     if (input.mobile !== undefined) updateData.mobile = input.mobile;
     if (input.email !== undefined) updateData.email = input.email;
     if (input.address !== undefined) updateData.addressEncrypted = encrypt(input.address);
-    if (input.emergencyContactName !== undefined) updateData.emergencyContactName = input.emergencyContactName;
-    if (input.emergencyContactPhone !== undefined) updateData.emergencyContactPhone = input.emergencyContactPhone;
+    if (input.emergencyContactName !== undefined)
+      updateData.emergencyContactName = input.emergencyContactName;
+    if (input.emergencyContactPhone !== undefined)
+      updateData.emergencyContactPhone = input.emergencyContactPhone;
     if (input.employeeCode !== undefined) updateData.employeeCode = input.employeeCode;
     if (input.position !== undefined) updateData.position = input.position;
     if (input.department !== undefined) updateData.department = input.department;
@@ -107,7 +107,8 @@ export async function PATCH(
     if (input.probationEnd !== undefined) updateData.probationEnd = input.probationEnd;
     if (input.employmentType !== undefined) updateData.employmentType = input.employmentType;
     if (input.contractEndDate !== undefined) updateData.contractEndDate = input.contractEndDate;
-    if (input.bankDetails !== undefined) updateData.bankJsonEncrypted = encrypt(JSON.stringify(input.bankDetails));
+    if (input.bankDetails !== undefined)
+      updateData.bankJsonEncrypted = encrypt(JSON.stringify(input.bankDetails));
     if (input.cpfAccountNumber !== undefined) updateData.cpfAccountNumber = input.cpfAccountNumber;
     if (input.workPassType !== undefined) updateData.workPassType = input.workPassType;
     if (input.workPassExpiry !== undefined) updateData.workPassExpiry = input.workPassExpiry;
@@ -122,9 +123,7 @@ export async function PATCH(
       .returning({ id: employees.id, fullName: employees.fullName });
 
     // Audit log — only log non-PII field names that changed
-    const changedFields = Object.keys(input).filter(
-      (k) => k !== "bankDetails" && k !== "address",
-    );
+    const changedFields = Object.keys(input).filter((k) => k !== "bankDetails" && k !== "address");
 
     await logAudit({
       userId: session.id,
@@ -132,7 +131,12 @@ export async function PATCH(
       entityType: "employee",
       entityId: id,
       oldValue: { changedFields },
-      newValue: { changedFields, values: Object.fromEntries(changedFields.map((k) => [k, (input as Record<string, unknown>)[k]])) },
+      newValue: {
+        changedFields,
+        values: Object.fromEntries(
+          changedFields.map((k) => [k, (input as Record<string, unknown>)[k]]),
+        ),
+      },
       ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
     });
 

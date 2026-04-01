@@ -33,7 +33,7 @@ export async function GET() {
       .where(eq(employees.companyId, session.companyId))
       .orderBy(employees.fullName);
 
-    const masked = result.map((emp) => ({
+    const masked = result.map((emp: (typeof result)[number]) => ({
       ...emp,
       nricDisplay: maskNric(emp.nricLast4),
     }));
@@ -55,7 +55,10 @@ export async function POST(request: NextRequest) {
 
     if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: parsed.error.issues[0]?.message ?? "Validation failed" } satisfies ApiResponse,
+        {
+          success: false,
+          error: parsed.error.issues[0]?.message ?? "Validation failed",
+        } satisfies ApiResponse,
         { status: 400 },
       );
     }
@@ -87,7 +90,9 @@ export async function POST(request: NextRequest) {
         probationEnd: input.probationEnd,
         employmentType: input.employmentType,
         contractEndDate: input.contractEndDate,
-        bankJsonEncrypted: input.bankDetails ? encrypt(JSON.stringify(input.bankDetails)) : undefined,
+        bankJsonEncrypted: input.bankDetails
+          ? encrypt(JSON.stringify(input.bankDetails))
+          : undefined,
         cpfAccountNumber: input.cpfAccountNumber,
         workPassType: input.workPassType,
         workPassExpiry: input.workPassExpiry,
@@ -100,14 +105,17 @@ export async function POST(request: NextRequest) {
       action: "create_employee",
       entityType: "employee",
       entityId: newEmployee?.id,
-      newValue: { fullName: input.fullName, position: input.position, department: input.department },
+      newValue: {
+        fullName: input.fullName,
+        position: input.position,
+        department: input.department,
+      },
       ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
     });
 
-    return NextResponse.json(
-      { success: true, data: newEmployee } satisfies ApiResponse,
-      { status: 201 },
-    );
+    return NextResponse.json({ success: true, data: newEmployee } satisfies ApiResponse, {
+      status: 201,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal server error";
     const status = message.startsWith("Unauthorized") ? 401 : 500;

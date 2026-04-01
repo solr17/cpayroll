@@ -1,19 +1,6 @@
-import {
-  pgTable,
-  uuid,
-  date,
-  integer,
-  numeric,
-  pgEnum,
-  timestamp,
-} from "drizzle-orm/pg-core";
+import { pgTable, uuid, date, integer, numeric, pgEnum, timestamp } from "drizzle-orm/pg-core";
 
-export const cpfStatusTypeEnum = pgEnum("cpf_status_type", [
-  "SC",
-  "PR1",
-  "PR2",
-  "PR3",
-]);
+export const cpfStatusTypeEnum = pgEnum("cpf_status_type", ["SC", "PR1", "PR2", "PR3"]);
 
 export const cpfRateTables = pgTable("cpf_rate_tables", {
   id: uuid("id").defaultRandom().primaryKey(),

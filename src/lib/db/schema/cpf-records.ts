@@ -1,11 +1,4 @@
-import {
-  pgTable,
-  uuid,
-  integer,
-  numeric,
-  text,
-  timestamp,
-} from "drizzle-orm/pg-core";
+import { pgTable, uuid, integer, numeric, text, timestamp } from "drizzle-orm/pg-core";
 import { payslips } from "./payslips";
 import { employees } from "./employees";
 

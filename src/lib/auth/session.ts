@@ -22,9 +22,9 @@ export async function getSession(): Promise<SessionUser | null> {
   if (!sessionToken) return null;
 
   try {
-    const payload = JSON.parse(
-      Buffer.from(sessionToken, "base64").toString("utf-8"),
-    ) as { userId: string };
+    const payload = JSON.parse(Buffer.from(sessionToken, "base64").toString("utf-8")) as {
+      userId: string;
+    };
 
     const [user] = await db
       .select({

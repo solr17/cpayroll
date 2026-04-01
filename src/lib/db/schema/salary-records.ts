@@ -6,7 +6,6 @@ import {
   boolean,
   jsonb,
   numeric,
-  text,
   timestamp,
 } from "drizzle-orm/pg-core";
 import { employees } from "./employees";

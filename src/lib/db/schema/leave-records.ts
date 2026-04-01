@@ -1,12 +1,4 @@
-import {
-  pgTable,
-  uuid,
-  date,
-  numeric,
-  text,
-  timestamp,
-  pgEnum,
-} from "drizzle-orm/pg-core";
+import { pgTable, uuid, date, numeric, text, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { employees } from "./employees";
 
 export const leaveTypeEnum = pgEnum("leave_type", [

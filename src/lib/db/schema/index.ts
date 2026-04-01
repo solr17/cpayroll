@@ -1,5 +1,10 @@
 export { companies } from "./companies";
-export { employees, citizenshipStatusEnum, employmentTypeEnum, employeeStatusEnum } from "./employees";
+export {
+  employees,
+  citizenshipStatusEnum,
+  employmentTypeEnum,
+  employeeStatusEnum,
+} from "./employees";
 export { salaryRecords } from "./salary-records";
 export { payRuns, payRunStatusEnum } from "./pay-runs";
 export { payslips } from "./payslips";

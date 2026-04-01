@@ -16,23 +16,27 @@ Arguments: $ARGUMENTS
 Ask questions. Wait for answers. Adapt based on task type.
 
 ### Core (always ask):
+
 1. What are we building? (one sentence)
 2. Why does this need to exist? (business/regulatory reason)
 3. Where in the codebase? (which module)
 4. What should it NOT do? (boundaries)
 
 ### If touches payroll/CPF/SDL/FWL:
+
 5. Involves monetary amounts? (confirm integer cents)
 6. Which CPF rules apply? (age bands, ceilings, rounding)
 7. Edge cases? (mid-month, zero wages, ceiling hits)
 8. Reference values from CPF Board calculator?
 
 ### If touches database:
+
 9. Touch financial data columns?
 10. Reversible migration? Rollback plan?
 11. Affects audit trail?
 
 ### If touches PII/auth:
+
 12. Handles NRIC, bank details, salary data?
 13. Who has access? (Owner/Admin/Employee)
 
@@ -41,6 +45,7 @@ Ask questions. Wait for answers. Adapt based on task type.
 Readiness test: "Could I implement this right now with zero questions left?" If no, keep interviewing.
 
 ### Present plan:
+
 ```
 === Implementation Plan ===
 Task: <summary>
@@ -59,11 +64,13 @@ Files: <list>
 ## Phase 2: Implement
 
 Pre-impl:
+
 - If payroll code: run `npm run test:cpf` for green baseline.
 - If db migration: run `npx drizzle-kit status`.
 - Create feature branch if needed.
 
 Rules:
+
 - Test-first for payroll calculations.
 - Integer cents everywhere. Variable names end in `_cents`.
 - CPF/SDL/FWL logic ONLY in `src/lib/payroll/`.
@@ -71,6 +78,7 @@ Rules:
 - NRIC: HMAC hash, last 4 only for display.
 
 Steps:
+
 1. Types/interfaces first.
 2. Tests that define expected behavior (test-first for financial).
 3. Implement.
@@ -81,6 +89,7 @@ Auto-proceed. No confirmation needed during implementation.
 ## Phase 3: Verify
 
 Auto-proceed through all:
+
 ```bash
 npm run test:cpf    # if payroll changed
 npm test            # full suite
@@ -88,6 +97,7 @@ npm run typecheck
 npm run lint
 npm run format
 ```
+
 Fix failures before Phase 4.
 
 ## Phase 4: Three-Agent Review
@@ -95,6 +105,7 @@ Fix failures before Phase 4.
 Spawn 3 review perspectives. Collect all findings before presenting.
 
 ### Agent 1: Bug Hunter (Financial Focus)
+
 - Rounding: Math.floor for employee CPF? Math.round for total? Employer = total - employee?
 - Dates: off-by-one in pro-ration, age-band transitions (1st of following month), PR changes
 - Ceilings: OW monthly cap, AW cap, annual limit
@@ -103,6 +114,7 @@ Spawn 3 review perspectives. Collect all findings before presenting.
 - Null handling, async errors, race conditions
 
 ### Agent 2: Architect (Centralisation & Audit)
+
 - ALL financial logic in src/lib/payroll/? Flag any outside.
 - Consistent integer cents? Flag parseFloat/toFixed on money.
 - Payroll engine pure (deterministic, no DB calls inside calc)?
@@ -112,12 +124,14 @@ Spawn 3 review perspectives. Collect all findings before presenting.
 - No N+1 queries, proper transactions?
 
 ### Agent 3: Simplifier (Clarity Without Sacrificing Accuracy)
+
 - Break complex functions into testable pieces?
 - Redundant abstractions?
 - Complex conditionals → lookup tables?
 - **DO NOT simplify**: CPF rounding, ceiling logic, age-band rules, encryption, audit logging.
 
 ### Output:
+
 ```
 === 3-Agent Review ===
 ## Bug Hunter: [issues]

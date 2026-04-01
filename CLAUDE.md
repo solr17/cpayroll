@@ -1,6 +1,7 @@
 # ClinicPay — Singapore Clinic Payroll Platform
 
 ## Quick Reference
+
 - **Stack**: Next.js 15 / React 19 / TypeScript / Tailwind CSS v4 / PostgreSQL (Neon) / Redis (Upstash) / BullMQ
 - **ORM**: Drizzle ORM with @neondatabase/serverless driver
 - **Auth**: NextAuth v5 with TOTP 2FA
@@ -8,6 +9,7 @@
 - **Lint/Format**: ESLint + Prettier
 
 ## Commands
+
 ```bash
 npm run dev              # Dev server
 npm run build            # Production build
@@ -28,6 +30,7 @@ npm run seed:cpf-rates   # Seed CPF rate tables
 ## Architecture
 
 ### Directory Structure
+
 ```
 src/
   app/                    # Next.js App Router
@@ -58,6 +61,7 @@ docs/                     # Documentation
 ```
 
 ### Key Rules
+
 - **All monetary values are integer cents.** Variables end in `_cents`. No floats for money.
 - **CPF calculation is centralised** in `src/lib/payroll/`. No CPF math anywhere else.
 - **Rounding rules (sacrosanct):**
@@ -72,6 +76,7 @@ docs/                     # Documentation
 ## NEVER Rules
 
 ### Financial Accuracy
+
 - NEVER use float/double for monetary amounts. Always integer cents.
 - NEVER use Math.round() for employee CPF share. Always Math.floor().
 - NEVER calculate employer CPF independently. Always totalCpf - employeeCpf.
@@ -84,6 +89,7 @@ docs/                     # Documentation
 - NEVER use OW ceiling of $7,400. It is $8,000 from 2026.
 
 ### Security / PDPA
+
 - NEVER log, print, or display a full NRIC/FIN. Only nric_last4 in UI/logs/reports.
 - NEVER store NRIC in plaintext. Only HMAC-SHA256 hash + last 4 chars.
 - NEVER return PII in API responses unless endpoint requires it AND user has correct RBAC role.
@@ -93,43 +99,49 @@ docs/                     # Documentation
 - NEVER send salary data in error messages, toasts, or console.log.
 
 ### Database
+
 - NEVER drop a column containing financial data without backup step.
 - NEVER use CASCADE DELETE on payslips, cpf_records, or audit_log.
 - NEVER alter audit_log to add UPDATE or DELETE permissions.
-- NEVER change a _cents column from integer to float/decimal.
+- NEVER change a \_cents column from integer to float/decimal.
 
 ### Code Quality
+
 - NEVER duplicate CPF calculation logic. Import from src/lib/payroll/.
 - NEVER use `any` type. Use proper types.
 - NEVER skip tests for payroll calculation changes. Test-first is mandatory.
 - NEVER merge without CPF tests passing (npm run test:cpf).
 
 ## Docs Mapping
-| Code Path | Doc File |
-|-----------|----------|
-| `src/lib/payroll/**` | `docs/cpf-rules.md`, `docs/architecture.md` |
-| `src/app/api/**` | `docs/api.md` |
-| `src/lib/db/schema/**` | `docs/architecture.md` |
-| Deployment configs | `docs/deployment.md` |
-| CPF rate changes | `docs/regulatory.md` |
+
+| Code Path              | Doc File                                    |
+| ---------------------- | ------------------------------------------- |
+| `src/lib/payroll/**`   | `docs/cpf-rules.md`, `docs/architecture.md` |
+| `src/app/api/**`       | `docs/api.md`                               |
+| `src/lib/db/schema/**` | `docs/architecture.md`                      |
+| Deployment configs     | `docs/deployment.md`                        |
+| CPF rate changes       | `docs/regulatory.md`                        |
 
 ## Effort Levels
+
 - **Default: high** — use for 80% of tasks.
 - **ultrathink/max** — only for genuinely hard debugging or complex CPF edge cases.
 - Burning context on thinking tokens for routine tasks degrades performance in long sessions.
 
 ## Context Management
+
 - Compact proactively at ~50% context usage. Preserve: current plan, files being edited, test results.
 - /clear between unrelated tasks.
 - If correcting the same issue twice, stop and re-plan instead of retrying.
 
 ## Workflow Commands
-| Command | When to Use |
-|---------|------------|
-| `/start` | Begin session. Loads context, classifies task risk. |
-| `/ship` | Pre-merge: CPF tests → full tests → typecheck → lint → financial audit → security scan → commit. Asks before push. |
-| `/quality` | Deep 4-category review (financial, code, security, database). |
-| `/quickfix` | Fast bug fix. Auto: test-first → fix → verify → NEVER rule → commit. |
-| `/techdebt` | Safe refactoring with risk classification. |
-| `/update-docs` | Sync docs with code changes. |
-| `/done` | End session. Auto: commit → update CLAUDE.md → update docs → push → summary. |
+
+| Command        | When to Use                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `/start`       | Begin session. Loads context, classifies task risk.                                                                |
+| `/ship`        | Pre-merge: CPF tests → full tests → typecheck → lint → financial audit → security scan → commit. Asks before push. |
+| `/quality`     | Deep 4-category review (financial, code, security, database).                                                      |
+| `/quickfix`    | Fast bug fix. Auto: test-first → fix → verify → NEVER rule → commit.                                               |
+| `/techdebt`    | Safe refactoring with risk classification.                                                                         |
+| `/update-docs` | Sync docs with code changes.                                                                                       |
+| `/done`        | End session. Auto: commit → update CLAUDE.md → update docs → push → summary.                                       |
