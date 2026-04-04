@@ -18,7 +18,7 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
           element_allowlist: ["a", "button", "form"],
         },
         // Strip PII from captured data
-        sanitize_properties: (properties) => {
+        sanitize_properties: (properties: Record<string, unknown>) => {
           // Remove any NRIC patterns
           for (const key of Object.keys(properties)) {
             if (typeof properties[key] === "string") {
