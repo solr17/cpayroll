@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth/session";
 import { calculatePayRun } from "@/lib/payroll/pay-run";
+import { dispatchWebhook } from "@/lib/webhooks/dispatch";
 import { z } from "zod";
 import type { ApiResponse } from "@/types";
 
@@ -61,17 +62,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         | undefined,
     );
 
+    const responseData = {
+      employeeCount: result.results.length,
+      totalGrossCents: result.totalGross,
+      totalNetCents: result.totalNet,
+      totalEmployerCpfCents: result.totalEmployerCpf,
+      totalEmployeeCpfCents: result.totalEmployeeCpf,
+      totalSdlCents: result.totalSdl,
+      totalFwlCents: result.totalFwl,
+    };
+
+    // Fire-and-forget webhook dispatch
+    dispatchWebhook(session.companyId, "payroll.calculated", {
+      payRunId: id,
+      ...responseData,
+    }).catch(() => {});
+
     return NextResponse.json({
       success: true,
-      data: {
-        employeeCount: result.results.length,
-        totalGrossCents: result.totalGross,
-        totalNetCents: result.totalNet,
-        totalEmployerCpfCents: result.totalEmployerCpf,
-        totalEmployeeCpfCents: result.totalEmployeeCpf,
-        totalSdlCents: result.totalSdl,
-        totalFwlCents: result.totalFwl,
-      },
+      data: responseData,
     } satisfies ApiResponse);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal server error";

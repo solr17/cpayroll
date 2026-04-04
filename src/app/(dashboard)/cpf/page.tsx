@@ -13,6 +13,7 @@ import {
   Select,
 } from "@/components/ui";
 import { centsToCurrency } from "@/lib/utils/money";
+import { apiFetch } from "@/lib/fetch";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -123,7 +124,7 @@ export default function CpfFilingPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/payroll/pay-runs");
+        const res = await apiFetch("/api/payroll/pay-runs");
         const data = await res.json();
         if (data.success) {
           setPayRuns(data.data as PayRun[]);
@@ -234,6 +235,11 @@ export default function CpfFilingPage() {
     }
   }, [selectedPayRunId]);
 
+  // CPF FTP Submission state
+  const [cpfFtpGenerating, setCpfFtpGenerating] = useState(false);
+  const [cpfFtpError, setCpfFtpError] = useState("");
+  const [cpfFtpPreview, setCpfFtpPreview] = useState<string[]>([]);
+
   // Load IR8A annual data
   const handleLoadIr8a = useCallback(async () => {
     setIr8aLoading(true);
@@ -241,7 +247,7 @@ export default function CpfFilingPage() {
     setIr8aEmployees([]);
 
     try {
-      const res = await fetch("/api/payroll/pay-runs");
+      const res = await apiFetch("/api/payroll/pay-runs");
       const data = await res.json();
       if (!data.success) throw new Error(data.error ?? "Failed to fetch pay runs");
 
@@ -288,6 +294,80 @@ export default function CpfFilingPage() {
       setIr8aLoading(false);
     }
   }, [ir8aYear]);
+
+  // Download IR8A AIS text file
+  const handleDownloadIr8aText = useCallback(async () => {
+    setIr8aLoading(true);
+    setIr8aError("");
+
+    try {
+      const res = await fetch(`/api/reports/ir8a?year=${ir8aYear}&format=text`);
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error ?? "Failed to generate IR8A file");
+      }
+
+      const text = await res.text();
+      const disposition = res.headers.get("content-disposition") ?? "";
+      const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+      const filename = filenameMatch?.[1] ?? `IR8A_AIS_YA${Number(ir8aYear) + 1}.txt`;
+
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setIr8aError(err instanceof Error ? err.message : "Failed to download IR8A file");
+    } finally {
+      setIr8aLoading(false);
+    }
+  }, [ir8aYear]);
+
+  // Generate CPF FTP Submission file
+  const handleGenerateCpfFtp = useCallback(async () => {
+    if (!selectedPayRunId) return;
+    setCpfFtpGenerating(true);
+    setCpfFtpError("");
+    setCpfFtpPreview([]);
+
+    try {
+      const res = await fetch(`/api/payroll/pay-runs/${selectedPayRunId}/export?type=cpf-ftp`);
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error ?? "Failed to generate CPF submission file");
+      }
+
+      const contentType = res.headers.get("content-type") ?? "";
+      if (contentType.includes("text/plain")) {
+        const fileText = await res.text();
+
+        const lines = fileText.split("\n").filter((l) => l.trim().length > 0);
+        setCpfFtpPreview(lines);
+
+        const blob = new Blob([fileText], { type: "text/plain;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const disposition = res.headers.get("content-disposition") ?? "";
+        const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+        a.download = filenameMatch?.[1] ?? "cpf-submission.txt";
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const data = await res.json();
+        throw new Error(data.error ?? "Unexpected response format");
+      }
+    } catch (err) {
+      setCpfFtpError(err instanceof Error ? err.message : "Failed to generate CPF submission file");
+    } finally {
+      setCpfFtpGenerating(false);
+    }
+  }, [selectedPayRunId]);
 
   if (loading) {
     return (
@@ -452,13 +532,62 @@ export default function CpfFilingPage() {
         )}
       </div>
 
+      {/* CPF Board FTP Submission */}
+      <div className="mt-10">
+        <Card title="CPF Board Submission File (FTP Format)">
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">
+              Generate a fixed-width CPF Board FTP submission file for e-Submit@CPF. This is the
+              formal bulk submission format, as opposed to the simpler EZPay CSV above.
+            </p>
+
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+              <Select
+                label="Pay Run"
+                id="cpf-ftp-pay-run"
+                options={payRunOptions}
+                value={selectedPayRunId}
+                onChange={(e) => {
+                  setSelectedPayRunId(e.target.value);
+                  setCpfFtpPreview([]);
+                  setCpfFtpError("");
+                }}
+                className="sm:w-80"
+              />
+              <Button
+                onClick={handleGenerateCpfFtp}
+                loading={cpfFtpGenerating}
+                disabled={!selectedPayRunId}
+              >
+                Generate CPF Submission File
+              </Button>
+            </div>
+
+            {cpfFtpError && <p className="text-sm text-red-600">{cpfFtpError}</p>}
+
+            {cpfFtpPreview.length > 0 && (
+              <div className="mt-4">
+                <h4 className="mb-2 text-sm font-medium text-gray-700">File Preview</h4>
+                <div className="max-h-64 overflow-auto rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <pre className="text-xs text-gray-600">
+                    {cpfFtpPreview.map((line, idx) => (
+                      <div key={idx}>{line}</div>
+                    ))}
+                  </pre>
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
+
       {/* IR8A Annual Filing */}
       <div className="mt-10">
         <Card title="IR8A Annual Filing">
           <div className="space-y-4">
             <p className="text-sm text-gray-500">
-              Generate annual IR8A tax filing data for IRAS submission. This feature will integrate
-              with the full IR8A XML export API when available.
+              Generate annual IR8A tax filing data for IRAS submission. Download the AIS text file
+              for electronic submission to IRAS, or load annual totals to review before filing.
             </p>
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
@@ -477,8 +606,8 @@ export default function CpfFilingPage() {
               <Button onClick={handleLoadIr8a} loading={ir8aLoading} variant="secondary">
                 Load Annual Totals
               </Button>
-              <Button disabled variant="secondary">
-                Generate IR8A XML (Coming Soon)
+              <Button onClick={handleDownloadIr8aText} loading={ir8aLoading}>
+                Download IR8A AIS File
               </Button>
             </div>
 

@@ -12,18 +12,29 @@ import {
   employees,
   salaryRecords,
   cpfRateTables,
+  companies,
+  publicHolidays,
 } from "@/lib/db/schema";
 import { eq, and, desc, lte, sql } from "drizzle-orm";
 import { calculateEmployeePayroll } from "./engine";
 import { logAudit } from "@/lib/audit/log";
-import { daysInMonth, getAgeBandForMonth } from "@/lib/utils/date";
+import { daysInMonth, getAgeBandForMonth, formatDateISO } from "@/lib/utils/date";
 import type {
   EmployeePayrollInput,
   EmployeePayrollResult,
   CpfRateEntry,
   VariablePayItems,
+  ProrationMethod,
 } from "./types";
+import { determineShgFund } from "./shg";
 import type { PayRunStatus, CitizenshipStatus } from "@/types";
+
+/** Warning for employees skipped during pay run calculation */
+export interface PayRunWarning {
+  employeeId: string;
+  name: string;
+  reason: string;
+}
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   draft: ["calculated"],
@@ -206,6 +217,32 @@ export async function calculatePayRun(
     throw new Error(`Cannot calculate from status: ${run.status}`);
   }
 
+  // Load company settings for proration method
+  const [company] = await db
+    .select({ prorationMethod: companies.prorationMethod })
+    .from(companies)
+    .where(eq(companies.id, companyId))
+    .limit(1);
+
+  const prorationMethod = (company?.prorationMethod ?? "calendar") as ProrationMethod;
+
+  // Load public holidays for the period month (for working-day proration)
+  let holidayDates: string[] = [];
+  if (prorationMethod === "working") {
+    const periodYear = new Date(run.periodStart).getFullYear();
+    const holidays = await db
+      .select({ date: publicHolidays.date })
+      .from(publicHolidays)
+      .where(
+        and(
+          eq(publicHolidays.year, periodYear),
+          sql`${publicHolidays.date} >= ${run.periodStart}`,
+          sql`${publicHolidays.date} <= ${run.periodEnd}`,
+        ),
+      );
+    holidayDates = holidays.map((h: { date: string }) => h.date);
+  }
+
   // Get active employees (include probation — they still get paid)
   const activeEmployees = await db
     .select()
@@ -223,6 +260,8 @@ export async function calculatePayRun(
   let totalEmployeeCpf = 0;
   let totalSdl = 0;
   let totalFwl = 0;
+  let totalShg = 0;
+  const warnings: PayRunWarning[] = [];
 
   // Clear existing payslips and CPF records for this run (recalculation)
   const existingPayslips = await db
@@ -238,6 +277,20 @@ export async function calculatePayRun(
     // Skip employees who haven't started yet or already terminated before period
     if (emp.hireDate > run.periodEnd) continue;
     if (emp.terminationDate && emp.terminationDate < run.periodStart) continue;
+
+    // Skip foreign workers with expired work passes (expiry before pay period end)
+    if (
+      emp.citizenshipStatus === "FW" &&
+      emp.workPassExpiry &&
+      emp.workPassExpiry < run.periodEnd
+    ) {
+      warnings.push({
+        employeeId: emp.id,
+        name: emp.fullName,
+        reason: `Work pass expired on ${formatDateISO(emp.workPassExpiry)}`,
+      });
+      continue;
+    }
 
     // Get latest salary record effective on or before the period end
     const [salary] = await db
@@ -270,6 +323,9 @@ export async function calculatePayRun(
     // Get FWL rate from employee record (stored as work pass levy)
     const fwlRateCents = emp.citizenshipStatus === "FW" ? parseFwlRate(emp) : 0;
 
+    // Determine SHG fund from employee race/religion
+    const shgFundType = determineShgFund(emp.race ?? null, emp.religion ?? null);
+
     // Merge variable items from the map if provided
     const empVariableItems = variableItemsMap?.[emp.id];
     const variableItems: VariablePayItems = {
@@ -295,6 +351,8 @@ export async function calculatePayRun(
       hireDate: emp.hireDate,
       terminationDate: emp.terminationDate,
       fwlRateCents,
+      shgFundType,
+      shgOptedOut: emp.shgOptedOut ?? false,
       variableItems,
       ytdOwCents: ytd.ytdOwCents,
       ytdAwCents: ytd.ytdAwCents,
@@ -303,6 +361,8 @@ export async function calculatePayRun(
       periodEnd: run.periodEnd,
       totalDaysInMonth: totalDays,
       rates,
+      prorationMethod,
+      publicHolidayDates: holidayDates,
     };
 
     const result = calculateEmployeePayroll(input);
@@ -315,7 +375,7 @@ export async function calculatePayRun(
         payRunId,
         employeeId: emp.id,
         basicSalaryCents: result.basicSalaryCents,
-        proratedDays: String(totalDays),
+        proratedDays: result.daysWorked < totalDays ? String(result.daysWorked) : null,
         grossPayCents: result.grossPayCents,
         otHours: String(result.otHours),
         otPayCents: result.otPayCents,
@@ -325,6 +385,8 @@ export async function calculatePayRun(
         employeeCpfCents: result.cpf.employeeCpfCents,
         sdlCents: result.sdl.sdlCents,
         fwlCents: result.fwl.fwlCents,
+        shgCents: result.shg.contributionCents,
+        shgFundType: result.shg.fundType,
         netPayCents: result.netPayCents,
         employerTotalCostCents: result.employerTotalCostCents,
       })
@@ -356,9 +418,10 @@ export async function calculatePayRun(
     totalEmployeeCpf += result.cpf.employeeCpfCents;
     totalSdl += result.sdl.sdlCents;
     totalFwl += result.fwl.fwlCents;
+    totalShg += result.shg.contributionCents;
   }
 
-  // Update pay run totals and status
+  // Update pay run totals and status (reset dual approval fields on recalculation)
   await db
     .update(payRuns)
     .set({
@@ -369,6 +432,11 @@ export async function calculatePayRun(
       totalEmployeeCpfCents: totalEmployeeCpf,
       totalSdlCents: totalSdl,
       totalFwlCents: totalFwl,
+      requiresDualApproval: false,
+      firstApprovedBy: null,
+      firstApprovedAt: null,
+      secondApprovedBy: null,
+      secondApprovedAt: null,
       updatedAt: new Date(),
     })
     .where(eq(payRuns.id, payRunId));
@@ -381,7 +449,17 @@ export async function calculatePayRun(
     newValue: { employeeCount: results.length, totalGross, totalNet },
   });
 
-  return { results, totalGross, totalNet, totalEmployerCpf, totalEmployeeCpf, totalSdl, totalFwl };
+  return {
+    results,
+    warnings,
+    totalGross,
+    totalNet,
+    totalEmployerCpf,
+    totalEmployeeCpf,
+    totalSdl,
+    totalFwl,
+    totalShg,
+  };
 }
 
 /** Parse FWL rate from employee record metadata */
@@ -395,13 +473,26 @@ function parseFwlRate(emp: { workPassType: string | null }): number {
   return 0;
 }
 
+/** Result from a pay run transition, includes messaging for dual approval */
+export interface TransitionResult {
+  transitioned: boolean;
+  status: PayRunStatus;
+  message: string;
+  dualApproval?: {
+    required: boolean;
+    firstApprovedBy?: string | null;
+    firstApprovedAt?: Date | null;
+    awaitingSecond: boolean;
+  };
+}
+
 /** Transition pay run status */
 export async function transitionPayRun(
   payRunId: string,
   companyId: string,
   newStatus: PayRunStatus,
   userId: string,
-) {
+): Promise<TransitionResult> {
   const [run] = await db
     .select()
     .from(payRuns)
@@ -413,6 +504,98 @@ export async function transitionPayRun(
     throw new Error(`Invalid transition: ${run.status} → ${newStatus}`);
   }
 
+  // --- Dual approval logic for reviewed → approved ---
+  if (run.status === "reviewed" && newStatus === "approved") {
+    const [company] = await db
+      .select({ dualApprovalThresholdCents: companies.dualApprovalThresholdCents })
+      .from(companies)
+      .where(eq(companies.id, companyId))
+      .limit(1);
+
+    const threshold = company?.dualApprovalThresholdCents ?? 0;
+    const grossTotal = run.totalGrossCents ?? 0;
+
+    if (threshold > 0 && grossTotal >= threshold) {
+      // Dual approval is required
+      if (!run.firstApprovedBy) {
+        // First approval — record it, stay in "reviewed"
+        const now = new Date();
+        await db
+          .update(payRuns)
+          .set({
+            requiresDualApproval: true,
+            firstApprovedBy: userId,
+            firstApprovedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(payRuns.id, payRunId));
+
+        await logAudit({
+          userId,
+          action: "first_approval_pay_run",
+          entityType: "pay_run",
+          entityId: payRunId,
+          newValue: { dualApproval: true, approvalNumber: 1 },
+        });
+
+        return {
+          transitioned: false,
+          status: "reviewed",
+          message: "First approval recorded. Awaiting second approval from a different user.",
+          dualApproval: {
+            required: true,
+            firstApprovedBy: userId,
+            firstApprovedAt: now,
+            awaitingSecond: true,
+          },
+        };
+      }
+
+      // Second approval — must be a different person
+      if (run.firstApprovedBy === userId) {
+        throw new Error(
+          "Dual approval requires a different user. You already provided the first approval.",
+        );
+      }
+
+      // Complete the dual approval and transition to "approved"
+      const now = new Date();
+      await db
+        .update(payRuns)
+        .set({
+          status: "approved",
+          secondApprovedBy: userId,
+          secondApprovedAt: now,
+          approvedBy: userId,
+          approvedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(payRuns.id, payRunId));
+
+      await logAudit({
+        userId,
+        action: "second_approval_pay_run",
+        entityType: "pay_run",
+        entityId: payRunId,
+        oldValue: { status: run.status },
+        newValue: { status: "approved", dualApproval: true, approvalNumber: 2 },
+      });
+
+      return {
+        transitioned: true,
+        status: "approved",
+        message: "Second approval recorded. Pay run is now approved.",
+        dualApproval: {
+          required: true,
+          firstApprovedBy: run.firstApprovedBy,
+          firstApprovedAt: run.firstApprovedAt,
+          awaitingSecond: false,
+        },
+      };
+    }
+  }
+
+  // --- Standard (single) transition ---
   const updates: Record<string, unknown> = { status: newStatus, updatedAt: new Date() };
   if (newStatus === "approved") {
     updates.approvedBy = userId;
@@ -432,6 +615,12 @@ export async function transitionPayRun(
     oldValue: { status: run.status },
     newValue: { status: newStatus },
   });
+
+  return {
+    transitioned: true,
+    status: newStatus,
+    message: `Pay run transitioned to ${newStatus}.`,
+  };
 }
 
 /** Delete a draft pay run */

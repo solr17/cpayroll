@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { z } from "zod";
 import { Card, Button, Input, Select, Modal, PageHeader, Spinner, Badge } from "@/components/ui";
+import { apiFetch } from "@/lib/fetch";
 
 // ---------------------------------------------------------------------------
 // Validation schema (mirrors server schema, minus nric for update)
@@ -428,7 +429,7 @@ export default function EditEmployeePage() {
 
     setSalarySubmitting(true);
     try {
-      const res = await fetch("/api/salary", {
+      const res = await apiFetch("/api/salary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

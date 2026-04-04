@@ -13,7 +13,9 @@ import {
   EmptyState,
   Table,
 } from "@/components/ui";
+import { apiFetch } from "@/lib/fetch";
 import { centsToCurrency } from "@/lib/utils/money";
+import { trackEvent } from "@/lib/analytics";
 import type { PayRunStatus } from "@/types";
 
 interface PayRun {
@@ -43,7 +45,7 @@ export default function PayrollPage() {
   const loadPayRuns = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/payroll/pay-runs");
+      const res = await apiFetch("/api/payroll/pay-runs");
       const data = await res.json();
       if (data.success) {
         setPayRuns(data.data);
@@ -83,20 +85,21 @@ export default function PayrollPage() {
       return;
     }
 
-    if (payDate < periodEnd) {
-      setFormError("Pay date must be on or after period end");
+    if (payDate < periodStart) {
+      setFormError("Pay date must be on or after period start");
       return;
     }
 
     setCreating(true);
     try {
-      const res = await fetch("/api/payroll/pay-runs", {
+      const res = await apiFetch("/api/payroll/pay-runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ periodStart, periodEnd, payDate }),
       });
       const data = await res.json();
       if (data.success) {
+        trackEvent("pay_run_created");
         setModalOpen(false);
         await loadPayRuns();
       } else {

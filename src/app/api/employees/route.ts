@@ -7,6 +7,7 @@ import { createEmployeeSchema } from "@/lib/validators/employee";
 import { hashNric, nricLast4 } from "@/lib/crypto/nric";
 import { encrypt } from "@/lib/crypto/aes";
 import { logAudit } from "@/lib/audit/log";
+import { dispatchWebhook } from "@/lib/webhooks/dispatch";
 import { maskNric } from "@/lib/crypto/nric";
 import type { ApiResponse } from "@/types";
 
@@ -112,6 +113,11 @@ export async function POST(request: NextRequest) {
       },
       ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
     });
+
+    // Fire-and-forget webhook dispatch
+    dispatchWebhook(session.companyId, "employee.created", {
+      employeeId: newEmployee?.id,
+    }).catch(() => {});
 
     return NextResponse.json({ success: true, data: newEmployee } satisfies ApiResponse, {
       status: 201,

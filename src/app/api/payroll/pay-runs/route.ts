@@ -13,8 +13,8 @@ const createPayRunSchema = z
   .refine((data) => data.periodEnd >= data.periodStart, {
     message: "periodEnd must be on or after periodStart",
   })
-  .refine((data) => data.payDate >= data.periodEnd, {
-    message: "payDate must be on or after periodEnd",
+  .refine((data) => data.payDate >= data.periodStart, {
+    message: "payDate must be on or after periodStart",
   });
 
 /** GET /api/payroll/pay-runs — List all pay runs for the company */

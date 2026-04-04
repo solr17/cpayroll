@@ -6,6 +6,7 @@ import { requireRole } from "@/lib/auth/session";
 import { updateEmployeeSchema } from "@/lib/validators/employee";
 import { encrypt, decrypt } from "@/lib/crypto/aes";
 import { logAudit } from "@/lib/audit/log";
+import { dispatchWebhook } from "@/lib/webhooks/dispatch";
 import { maskNric } from "@/lib/crypto/nric";
 import type { ApiResponse, BankDetails } from "@/types";
 
@@ -139,6 +140,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       },
       ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
     });
+
+    // Fire-and-forget webhook dispatch
+    dispatchWebhook(session.companyId, "employee.updated", {
+      employeeId: id,
+      changedFields,
+    }).catch(() => {});
 
     return NextResponse.json({ success: true, data: updated } satisfies ApiResponse);
   } catch (err) {

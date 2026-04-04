@@ -1,20 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { payRuns, payslips, employees, cpfRecords, companies } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { payRuns, payslips, employees, cpfRecords, companies, payments } from "@/lib/db/schema";
+import { eq, and, inArray } from "drizzle-orm";
 import { requireRole } from "@/lib/auth/session";
 import { decrypt } from "@/lib/crypto/aes";
 import { generateDbsGiroFile } from "@/lib/bank/dbs";
 import { generateOcbcFile } from "@/lib/bank/ocbc";
 import { generateUobFile } from "@/lib/bank/uob";
+import { generateHsbcFile } from "@/lib/bank/hsbc";
+import { generateScFile } from "@/lib/bank/sc";
+import { generateMaybankFile } from "@/lib/bank/maybank";
+import { generateCimbFile } from "@/lib/bank/cimb";
 import { generateCpfEzPayFile } from "@/lib/documents/cpf-ezpay";
+import { generateCpfSubmissionFile } from "@/lib/documents/cpf-submission";
 import { generatePayslipHtml } from "@/lib/documents/payslip-html";
 import { logAudit } from "@/lib/audit/log";
 import type { ApiResponse, BankDetails } from "@/types";
 import type { PayrollAllowance, PayrollDeduction } from "@/lib/payroll/types";
 import type { BankPaymentRecord } from "@/lib/bank/types";
 
-const VALID_EXPORT_TYPES = ["bank-dbs", "bank-ocbc", "bank-uob", "cpf", "payslips"] as const;
+const VALID_EXPORT_TYPES = [
+  "bank-dbs",
+  "bank-ocbc",
+  "bank-uob",
+  "bank-hsbc",
+  "bank-sc",
+  "bank-maybank",
+  "bank-cimb",
+  "cpf",
+  "cpf-ftp",
+  "payslips",
+] as const;
 type ExportType = (typeof VALID_EXPORT_TYPES)[number];
 
 function isValidExportType(value: string): value is ExportType {
@@ -101,7 +117,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     });
 
     // Bank file exports
-    if (exportType === "bank-dbs" || exportType === "bank-ocbc" || exportType === "bank-uob") {
+    if (exportType.startsWith("bank-")) {
       const bankRecords: BankPaymentRecord[] = [];
 
       for (const row of slipsWithEmployees) {
@@ -111,7 +127,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         try {
           bankDetails = JSON.parse(decrypt(row.bankJsonEncrypted)) as BankDetails;
         } catch {
-          continue; // Skip employees with invalid bank data
+          continue;
         }
 
         const record: BankPaymentRecord = {
@@ -140,22 +156,85 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         companyCode?: string;
       } | null;
       const debitAccount = companyBank?.accountNumber ?? "";
+      const companyCode = companyBank?.companyCode ?? company.uen;
       const batchRef = `PR-${run.id.slice(0, 8)}`;
 
       let fileResult;
-      if (exportType === "bank-dbs") {
-        fileResult = generateDbsGiroFile(bankRecords, debitAccount, run.payDate, batchRef);
-      } else if (exportType === "bank-ocbc") {
-        const companyCode = companyBank?.companyCode ?? company.uen;
-        fileResult = generateOcbcFile(
-          bankRecords,
-          companyCode,
-          debitAccount,
-          run.payDate,
-          batchRef,
-        );
-      } else {
-        fileResult = generateUobFile(bankRecords, debitAccount, run.payDate, batchRef);
+      switch (exportType) {
+        case "bank-dbs":
+          fileResult = generateDbsGiroFile(bankRecords, debitAccount, run.payDate, batchRef);
+          break;
+        case "bank-ocbc":
+          fileResult = generateOcbcFile(
+            bankRecords,
+            companyCode,
+            debitAccount,
+            run.payDate,
+            batchRef,
+          );
+          break;
+        case "bank-uob":
+          fileResult = generateUobFile(bankRecords, debitAccount, run.payDate, batchRef);
+          break;
+        case "bank-hsbc":
+          fileResult = generateHsbcFile(
+            bankRecords,
+            companyCode,
+            debitAccount,
+            run.payDate,
+            batchRef,
+          );
+          break;
+        case "bank-sc":
+          fileResult = generateScFile(
+            bankRecords,
+            companyCode,
+            debitAccount,
+            run.payDate,
+            batchRef,
+          );
+          break;
+        case "bank-maybank":
+          fileResult = generateMaybankFile(bankRecords, debitAccount, run.payDate, batchRef);
+          break;
+        case "bank-cimb":
+          fileResult = generateCimbFile(bankRecords, debitAccount, run.payDate, batchRef);
+          break;
+        default:
+          return NextResponse.json(
+            { success: false, error: "Unknown bank format" } satisfies ApiResponse,
+            { status: 400 },
+          );
+      }
+
+      // Create payment records for each employee in the batch
+      try {
+        const bankLabel = exportType.replace("bank-", "").toUpperCase();
+        const paymentRecords = [];
+        for (const record of bankRecords) {
+          // Find the matching slip to get payslipId and employeeId
+          const matchedRow = slipsWithEmployees.find(
+            (row: (typeof slipsWithEmployees)[number]) => row.employeeName === record.employeeName,
+          );
+          const maskedAccount = record.accountNumber.slice(-4).padStart(4, "*");
+          paymentRecords.push({
+            companyId: session.companyId,
+            payRunId: id,
+            payslipId: matchedRow?.payslip.id ?? null,
+            employeeId: matchedRow?.employeeId ?? null,
+            employeeName: record.employeeName,
+            bankName: bankLabel,
+            accountNumberMasked: `****${maskedAccount}`,
+            amountCents: record.amountCents,
+            status: "pending" as const,
+            paymentMethod: record.payNowId ? "paynow" : "giro",
+          });
+        }
+        if (paymentRecords.length > 0) {
+          await db.insert(payments).values(paymentRecords);
+        }
+      } catch {
+        // Payment tracking is a side effect — do not break the export if it fails
       }
 
       return new NextResponse(fileResult.content, {
@@ -173,24 +252,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const payslipIds = slipsWithEmployees.map(
         (s: (typeof slipsWithEmployees)[number]) => s.payslip.id,
       );
-      const cpfData = await db
-        .select()
-        .from(cpfRecords)
-        .where(
-          payslipIds.length > 0
-            ? eq(cpfRecords.payslipId, payslipIds[0]!)
-            : eq(cpfRecords.payslipId, "00000000-0000-0000-0000-000000000000"),
-        );
-
-      // For multiple payslips, fetch all CPF records
       const allCpfRecords =
-        payslipIds.length <= 1
-          ? cpfData
-          : await Promise.all(
-              payslipIds.map((pid: string) =>
-                db.select().from(cpfRecords).where(eq(cpfRecords.payslipId, pid)),
-              ),
-            ).then((results) => results.flat());
+        payslipIds.length > 0
+          ? await db.select().from(cpfRecords).where(inArray(cpfRecords.payslipId, payslipIds))
+          : [];
 
       // Build CPF submission records (only SC/PR employees)
       const cpfSubmissionRecords = slipsWithEmployees
@@ -232,6 +297,56 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       });
     }
 
+    // CPF Board FTP submission file
+    if (exportType === "cpf-ftp") {
+      const payslipIds = slipsWithEmployees.map(
+        (s: (typeof slipsWithEmployees)[number]) => s.payslip.id,
+      );
+      const allCpfRecords =
+        payslipIds.length > 0
+          ? await db.select().from(cpfRecords).where(inArray(cpfRecords.payslipId, payslipIds))
+          : [];
+
+      const cpfSubmissionRecords = slipsWithEmployees
+        .filter((row: (typeof slipsWithEmployees)[number]) => row.citizenshipStatus !== "FW")
+        .map((row: (typeof slipsWithEmployees)[number]) => {
+          const cpfRecord = allCpfRecords.find(
+            (c: (typeof allCpfRecords)[number]) => c.payslipId === row.payslip.id,
+          );
+          return {
+            nricLast4: row.nricLast4,
+            fullName: row.employeeName,
+            owCents: cpfRecord?.owCappedCents ?? 0,
+            awCents: cpfRecord?.awCappedCents ?? 0,
+            employeeCpfCents: row.payslip.employeeCpfCents,
+            employerCpfCents: row.payslip.employerCpfCents,
+            totalCpfCents: row.payslip.employerCpfCents + row.payslip.employeeCpfCents,
+          };
+        });
+
+      const periodYearMonth = run.periodStart.slice(0, 7).replace("-", "");
+      const totalSdlCents = slipsWithEmployees.reduce(
+        (sum: number, r: (typeof slipsWithEmployees)[number]) => sum + r.payslip.sdlCents,
+        0,
+      );
+
+      const ftpFile = generateCpfSubmissionFile({
+        csn: company.cpfSubmissionNumber ?? company.uen,
+        companyName: company.name,
+        period: periodYearMonth,
+        employees: cpfSubmissionRecords,
+        totalSdlCents,
+      });
+
+      return new NextResponse(ftpFile.content, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${ftpFile.filename}"`,
+        },
+      });
+    }
+
     // Payslips HTML export
     if (exportType === "payslips") {
       const htmlPayslips: string[] = [];
@@ -250,6 +365,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           (a) => !["Bonus", "Commission", "AWS / 13th Month"].includes(a.name),
         );
 
+        // Map deductions to the new payslip format
+        const shgDeduction = deductions.find(
+          (d) => ["CDAC", "MBMF", "SINDA", "ECF"].includes(d.name) || d.name.includes("SHG"),
+        );
+        const otherDeds = deductions.filter(
+          (d) =>
+            d.name !== "Employee CPF" &&
+            !["CDAC", "MBMF", "SINDA", "ECF"].includes(d.name) &&
+            !d.name.includes("SHG"),
+        );
+
         const html = generatePayslipHtml({
           companyName: company.name,
           companyUen: company.uen,
@@ -261,7 +387,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           basicSalaryCents: row.payslip.basicSalaryCents,
           proratedDays: row.payslip.proratedDays,
           allowances: regularAllowances,
-          deductions,
+          otherDeductions: otherDeds,
+          shgCents: shgDeduction?.amountCents ?? 0,
+          ...(shgDeduction?.name ? { shgFundType: shgDeduction.name } : {}),
           otHours: parseFloat(row.payslip.otHours ?? "0"),
           otPayCents: row.payslip.otPayCents ?? 0,
           bonusCents,

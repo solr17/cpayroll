@@ -74,7 +74,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       data: {
         payslip: result.payslip,
         employee: {
-          name: result.employeeName,
+          fullName: result.employeeName,
           nricLast4: result.nricLast4,
           department: result.department,
           position: result.position,

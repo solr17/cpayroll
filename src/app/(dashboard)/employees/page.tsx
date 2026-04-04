@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { PageHeader, Badge, Spinner, EmptyState } from "@/components/ui";
+import { Badge, Spinner, EmptyState } from "@/components/ui";
+import { apiFetch } from "@/lib/fetch";
 
 interface Employee {
   id: string;
@@ -51,7 +52,7 @@ export default function EmployeesPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/employees");
+        const res = await apiFetch("/api/employees");
         const data = await res.json();
         if (data.success) {
           setEmployees(data.data);
@@ -98,12 +99,34 @@ export default function EmployeesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Employees"
-        subtitle={`${employees.length} total employee${employees.length !== 1 ? "s" : ""}`}
-        action="Add Employee"
-        onAction={() => (window.location.href = "/employees/new")}
-      />
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Employees</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            {employees.length} total employee{employees.length !== 1 ? "s" : ""}
+          </p>
+        </div>
+        <div className="mt-3 flex items-center gap-3 sm:mt-0">
+          <Link
+            href="/employees/import"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+          >
+            Import
+          </Link>
+          <Link
+            href="/employees/salary-revision"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+          >
+            Bulk Salary Revision
+          </Link>
+          <button
+            onClick={() => (window.location.href = "/employees/new")}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:from-sky-600 hover:to-blue-700"
+          >
+            Add Employee
+          </button>
+        </div>
+      </div>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">

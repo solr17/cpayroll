@@ -7,10 +7,42 @@ import { logAudit } from "@/lib/audit/log";
 import { z } from "zod";
 import type { ApiResponse } from "@/types";
 
+/** Mask a string for safe display: "abc123xyz" → "abc1****" */
+function maskString(value: string, visibleChars = 4): string {
+  if (value.length <= visibleChars) return "****";
+  return value.slice(0, visibleChars) + "****";
+}
+
 /** GET /api/settings — Get company settings */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await requireRole("owner", "admin");
+
+    // Handle DBS connection test
+    const check = request.nextUrl.searchParams.get("check");
+    if (check === "dbs") {
+      const clientId = process.env.DBS_RAPID_CLIENT_ID;
+      if (!clientId) {
+        return NextResponse.json({
+          success: false,
+          error: "DBS RAPID API is not configured",
+        } satisfies ApiResponse);
+      }
+
+      try {
+        const { testDbsConnection } = await import("@/lib/bank/dbs-rapid");
+        const connected = await testDbsConnection();
+        return NextResponse.json({
+          success: true,
+          data: { dbsConnected: connected },
+        } satisfies ApiResponse);
+      } catch {
+        return NextResponse.json({
+          success: false,
+          error: "DBS RAPID connection test failed",
+        } satisfies ApiResponse);
+      }
+    }
 
     const [company] = await db
       .select()
@@ -25,7 +57,20 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({ success: true, data: company } satisfies ApiResponse);
+    // Augment response with DBS RAPID configuration status
+    const dbsClientId = process.env.DBS_RAPID_CLIENT_ID;
+    const dbsDebitAccount = process.env.DBS_RAPID_DEBIT_ACCOUNT;
+
+    const dbsInfo = {
+      dbsRapidConfigured: !!dbsClientId,
+      dbsClientIdMasked: dbsClientId ? maskString(dbsClientId) : null,
+      dbsDebitAccountMasked: dbsDebitAccount ? maskString(dbsDebitAccount) : null,
+    };
+
+    return NextResponse.json({
+      success: true,
+      data: { ...company, ...dbsInfo },
+    } satisfies ApiResponse);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal server error";
     const status = message.startsWith("Unauthorized") ? 401 : 500;
@@ -48,12 +93,13 @@ const updateSettingsSchema = z.object({
     })
     .optional()
     .nullable(),
+  dualApprovalThresholdCents: z.number().int().min(0).optional(),
 });
 
 /** PATCH /api/settings — Update company settings */
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await requireRole("owner");
+    const session = await requireRole("owner", "admin");
     const body = await request.json();
     const parsed = updateSettingsSchema.safeParse(body);
 
@@ -78,6 +124,8 @@ export async function PATCH(request: NextRequest) {
     if (input.irasTaxRef !== undefined) updateData.irasTaxRef = input.irasTaxRef;
     if (input.payDay !== undefined) updateData.payDay = input.payDay;
     if (input.bankAccountJson !== undefined) updateData.bankAccountJson = input.bankAccountJson;
+    if (input.dualApprovalThresholdCents !== undefined)
+      updateData.dualApprovalThresholdCents = input.dualApprovalThresholdCents;
     updateData.updatedAt = new Date();
 
     const [updated] = await db

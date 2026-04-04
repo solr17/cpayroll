@@ -6,10 +6,23 @@ import Link from "next/link";
 import { Card, Button, Badge, StatusBadge, Modal, Spinner, Table } from "@/components/ui";
 import { centsToCurrency } from "@/lib/utils/money";
 import type { PayRunStatus } from "@/types";
+import { apiFetch } from "@/lib/fetch";
+import { trackEvent } from "@/lib/analytics";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+interface VarianceAlertData {
+  employeeId: string;
+  employeeName: string;
+  type: "high_variance" | "new_hire" | "termination" | "age_band_change" | "first_payroll";
+  message: string;
+  severity: "warning" | "info";
+  currentCents?: number;
+  previousCents?: number;
+  changePercent?: number;
+}
 
 interface Payslip {
   id: string;
@@ -62,6 +75,14 @@ interface PayRun {
   totalFwlCents: number;
   employeeCount: number;
   payslips: PayslipRow[];
+  requiresDualApproval: boolean;
+  firstApprovedBy: string | null;
+  firstApprovedAt: string | null;
+  secondApprovedBy: string | null;
+  secondApprovedAt: string | null;
+  // Populated by the API join for display
+  firstApproverName?: string | null;
+  secondApproverName?: string | null;
 }
 
 interface VariableItems {
@@ -234,6 +255,19 @@ export default function PayRunDetailPage() {
   // Expanded payslip rows for review
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
+  // Variance alerts
+  const [varianceAlerts, setVarianceAlerts] = useState<VarianceAlertData[]>([]);
+  const [varianceLoading, setVarianceLoading] = useState(false);
+  const [varianceOpen, setVarianceOpen] = useState(true);
+
+  // Email payslips state
+  const [emailResult, setEmailResult] = useState<{
+    sent: number;
+    failed: number;
+    skipped: number;
+    total: number;
+  } | null>(null);
+
   // Confirmation modal
   const [confirmModal, setConfirmModal] = useState<{
     open: boolean;
@@ -263,7 +297,7 @@ export default function PayRunDetailPage() {
   // Load employees for draft state (before payslips exist)
   const loadEmployees = useCallback(async () => {
     try {
-      const [empRes] = await Promise.all([fetch("/api/employees")]);
+      const [empRes] = await Promise.all([apiFetch("/api/employees")]);
       const empData = await empRes.json();
       if (empData.success) {
         // Fetch salary info for each employee
@@ -300,10 +334,33 @@ export default function PayRunDetailPage() {
     }
   }, []);
 
+  // Load variance alerts for calculated/reviewed/approved/paid runs
+  const loadVarianceAlerts = useCallback(async () => {
+    try {
+      setVarianceLoading(true);
+      const res = await fetch(`/api/payroll/pay-runs/${id}/variance`);
+      const data = await res.json();
+      if (data.success) {
+        setVarianceAlerts(data.data);
+      }
+    } catch {
+      // Silently fail — variance alerts are supplementary
+    } finally {
+      setVarianceLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => {
     loadPayRun();
     loadEmployees();
   }, [loadPayRun, loadEmployees]);
+
+  // Load variance alerts when pay run is loaded and not draft
+  useEffect(() => {
+    if (payRun && payRun.status !== "draft") {
+      loadVarianceAlerts();
+    }
+  }, [payRun?.status, loadVarianceAlerts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // -------------------------------------------------------------------------
   // Variable items helpers (Step 1)
@@ -368,6 +425,7 @@ export default function PayRunDetailPage() {
       });
       const data = await res.json();
       if (data.success) {
+        trackEvent("payroll_calculated");
         await loadPayRun();
       } else {
         setActionError(data.error ?? "Calculation failed");
@@ -395,9 +453,13 @@ export default function PayRunDetailPage() {
     await doTransition(newStatus);
   }
 
+  // Dual approval message shown after first approval
+  const [dualApprovalMessage, setDualApprovalMessage] = useState("");
+
   async function doTransition(newStatus: string) {
     setActionLoading(true);
     setActionError("");
+    setDualApprovalMessage("");
     try {
       const res = await fetch(`/api/payroll/pay-runs/${id}/transition`, {
         method: "POST",
@@ -406,6 +468,13 @@ export default function PayRunDetailPage() {
       });
       const data = await res.json();
       if (data.success) {
+        if (newStatus === "approved") {
+          trackEvent("payroll_approved");
+        }
+        // Check if this was a first approval in dual workflow (status stayed "reviewed")
+        if (data.data?.dualApproval?.awaitingSecond) {
+          setDualApprovalMessage(data.data.message);
+        }
         await loadPayRun();
       } else {
         setActionError(data.error ?? "Transition failed");
@@ -455,6 +524,25 @@ export default function PayRunDetailPage() {
       }
     } catch {
       setActionError("Export failed");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleEmailPayslips() {
+    setActionLoading(true);
+    setActionError("");
+    setEmailResult(null);
+    try {
+      const res = await fetch(`/api/payroll/pay-runs/${id}/email`, { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setEmailResult(data.data);
+      } else {
+        setActionError(data.error ?? "Failed to email payslips");
+      }
+    } catch {
+      setActionError("Failed to email payslips");
     } finally {
       setActionLoading(false);
     }
@@ -550,6 +638,119 @@ export default function PayRunDetailPage() {
         </div>
       )}
 
+      {/* Variance Alerts */}
+      {payRun.status !== "draft" && (varianceAlerts.length > 0 || varianceLoading) && (
+        <div className="mb-6">
+          <button
+            onClick={() => setVarianceOpen(!varianceOpen)}
+            className="flex w-full items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-left transition-colors hover:bg-amber-100"
+          >
+            <svg
+              className={
+                "h-4 w-4 text-amber-600 transition-transform " + (varianceOpen ? "rotate-90" : "")
+              }
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+            <span className="text-sm font-medium text-amber-800">Variance Alerts</span>
+            {!varianceLoading && (
+              <span className="ml-1 inline-flex items-center rounded-full bg-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                {varianceAlerts.length}
+              </span>
+            )}
+            {varianceLoading && <Spinner className="ml-1 h-4 w-4 text-amber-600" />}
+          </button>
+
+          {varianceOpen && !varianceLoading && varianceAlerts.length > 0 && (
+            <div className="mt-2 space-y-2">
+              {varianceAlerts.map((alert, idx) => (
+                <div
+                  key={`${alert.employeeId}-${alert.type}-${idx}`}
+                  className={
+                    "flex items-start gap-3 rounded-lg border px-4 py-3 " +
+                    (alert.severity === "warning"
+                      ? "border-amber-200 bg-amber-50"
+                      : "border-blue-200 bg-blue-50")
+                  }
+                >
+                  <div className="mt-0.5 flex-shrink-0">
+                    {alert.severity === "warning" ? (
+                      <svg
+                        className="h-4 w-4 text-amber-500"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"
+                        />
+                      </svg>
+                    ) : (
+                      <svg
+                        className="h-4 w-4 text-blue-500"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={
+                        "text-sm font-medium " +
+                        (alert.severity === "warning" ? "text-amber-800" : "text-blue-800")
+                      }
+                    >
+                      {alert.employeeName}
+                    </p>
+                    <p
+                      className={
+                        "text-sm " +
+                        (alert.severity === "warning" ? "text-amber-700" : "text-blue-700")
+                      }
+                    >
+                      {alert.message}
+                    </p>
+                    {alert.currentCents !== undefined && alert.previousCents !== undefined && (
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        Current: {centsToCurrency(alert.currentCents)} | Previous:{" "}
+                        {centsToCurrency(alert.previousCents)}
+                        {alert.changePercent !== undefined && (
+                          <span
+                            className={alert.changePercent > 0 ? "text-red-600" : "text-green-600"}
+                          >
+                            {" "}
+                            ({alert.changePercent > 0 ? "+" : ""}
+                            {alert.changePercent}%)
+                          </span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  <Badge variant={alert.severity === "warning" ? "warning" : "neutral"}>
+                    {alert.type.replace(/_/g, " ")}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Step 1: Enter Data (draft) */}
       {payRun.status === "draft" && (
         <EnterDataStep
@@ -580,6 +781,7 @@ export default function PayRunDetailPage() {
           onRecalculate={handleRecalculate}
           loading={actionLoading}
           status={payRun.status}
+          dualApprovalMessage={dualApprovalMessage}
         />
       )}
 
@@ -591,6 +793,19 @@ export default function PayRunDetailPage() {
           onMarkPaid={() =>
             handleTransition("paid", "Confirm that all salary payments have been made?")
           }
+          onEmailPayslips={() =>
+            setConfirmModal({
+              open: true,
+              title: "Email Payslips",
+              message:
+                "This will generate PDF payslips and email them to all employees with an email address on file. Continue?",
+              onConfirm: () => {
+                setConfirmModal((prev) => ({ ...prev, open: false }));
+                handleEmailPayslips();
+              },
+            })
+          }
+          emailResult={emailResult}
           loading={actionLoading}
           isPaid={false}
         />
@@ -604,6 +819,19 @@ export default function PayRunDetailPage() {
           onMarkPaid={() => {}}
           onGenerateCpf={() => handleExport("cpf")}
           onMarkFiled={() => handleTransition("filed", "Confirm CPF filing is complete?")}
+          onEmailPayslips={() =>
+            setConfirmModal({
+              open: true,
+              title: "Email Payslips",
+              message:
+                "This will generate PDF payslips and email them to all employees with an email address on file. Continue?",
+              onConfirm: () => {
+                setConfirmModal((prev) => ({ ...prev, open: false }));
+                handleEmailPayslips();
+              },
+            })
+          }
+          emailResult={emailResult}
           loading={actionLoading}
           isPaid={true}
           isFiled={payRun.status === "filed"}
@@ -822,6 +1050,7 @@ function ReviewStep({
   onRecalculate,
   loading,
   status,
+  dualApprovalMessage,
 }: {
   payRun: PayRun;
   expandedRows: Set<string>;
@@ -831,10 +1060,41 @@ function ReviewStep({
   onRecalculate: () => void;
   loading: boolean;
   status: PayRunStatus;
+  dualApprovalMessage?: string;
 }) {
+  const hasDualApproval = payRun.requiresDualApproval;
+  const awaitingSecond = hasDualApproval && payRun.firstApprovedBy && !payRun.secondApprovedBy;
+
   return (
     <div>
       <SummaryCards payRun={payRun} />
+
+      {/* Dual Approval Status Banner */}
+      {hasDualApproval && status === "reviewed" && (
+        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+          <h4 className="text-sm font-semibold text-blue-800">Dual Approval Required</h4>
+          {payRun.firstApprovedBy && (
+            <p className="mt-1 text-sm text-blue-700">
+              First approval by {payRun.firstApproverName ?? "User"} at{" "}
+              {payRun.firstApprovedAt
+                ? new Date(payRun.firstApprovedAt).toLocaleString("en-SG")
+                : "N/A"}
+            </p>
+          )}
+          {awaitingSecond && (
+            <p className="mt-1 text-sm font-medium text-amber-700">
+              Awaiting second approval from a different user.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Message from the last transition attempt */}
+      {dualApprovalMessage && (
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+          {dualApprovalMessage}
+        </div>
+      )}
 
       <Card title="Payslip Details">
         <div className="overflow-x-auto">
@@ -889,7 +1149,11 @@ function ReviewStep({
           Recalculate
         </Button>
         <Button onClick={onApprove} loading={loading} size="lg">
-          {status === "calculated" ? "Mark as Reviewed" : "Approve Pay Run"}
+          {status === "calculated"
+            ? "Mark as Reviewed"
+            : awaitingSecond
+              ? "Provide Second Approval"
+              : "Approve Pay Run"}
         </Button>
       </div>
     </div>
@@ -1030,6 +1294,8 @@ function PayStep({
   onMarkPaid,
   onGenerateCpf,
   onMarkFiled,
+  onEmailPayslips,
+  emailResult,
   loading,
   isPaid,
   isFiled = false,
@@ -1039,6 +1305,8 @@ function PayStep({
   onMarkPaid: () => void;
   onGenerateCpf?: () => void;
   onMarkFiled?: () => void;
+  onEmailPayslips?: () => void;
+  emailResult?: { sent: number; failed: number; skipped: number; total: number } | null;
   loading: boolean;
   isPaid: boolean;
   isFiled?: boolean;
@@ -1069,6 +1337,77 @@ function PayStep({
           </Button>
         </div>
       </Card>
+
+      {/* PayNow QR Codes */}
+      <div className="mt-6">
+        <Card title="PayNow QR Codes">
+          <p className="mb-4 text-sm text-gray-500">
+            Generate PayNow QR codes for all employees in this pay run. Employees can scan these
+            with their banking app to verify payment details.
+          </p>
+          <Link
+            href={`/payroll/${payRun.id}/paynow`}
+            className="inline-flex items-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-4 py-2 text-sm font-medium text-purple-700 hover:bg-purple-100"
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"
+              />
+            </svg>
+            View PayNow QR Codes
+          </Link>
+        </Card>
+      </div>
+
+      {/* Email Payslips */}
+      <div className="mt-6">
+        <Card title="Email Payslips">
+          <p className="mb-4 text-sm text-gray-500">
+            Generate PDF payslips and email them directly to employees. Only employees with an email
+            address on file will receive payslips.
+          </p>
+          {emailResult && (
+            <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm">
+              <p className="font-medium text-blue-800">Email Summary</p>
+              <ul className="mt-1 space-y-0.5 text-blue-700">
+                <li>
+                  Sent: {emailResult.sent} of {emailResult.total}
+                </li>
+                {emailResult.failed > 0 && (
+                  <li className="text-red-600">Failed: {emailResult.failed}</li>
+                )}
+                {emailResult.skipped > 0 && <li>Skipped (no email): {emailResult.skipped}</li>}
+              </ul>
+            </div>
+          )}
+          {onEmailPayslips && (
+            <Button variant="secondary" onClick={onEmailPayslips} loading={loading}>
+              <svg
+                className="mr-2 h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                />
+              </svg>
+              Email Payslips to Employees
+            </Button>
+          )}
+        </Card>
+      </div>
 
       {!isPaid && (
         <div className="mt-6 flex justify-end">

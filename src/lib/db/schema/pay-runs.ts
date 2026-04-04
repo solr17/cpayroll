@@ -1,4 +1,4 @@
-import { pgTable, uuid, date, integer, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, uuid, date, integer, timestamp, pgEnum, boolean } from "drizzle-orm/pg-core";
 import { companies } from "./companies";
 
 export const payRunStatusEnum = pgEnum("pay_run_status", [
@@ -28,6 +28,11 @@ export const payRuns = pgTable("pay_runs", {
   createdBy: uuid("created_by"),
   approvedBy: uuid("approved_by"),
   approvedAt: timestamp("approved_at", { withTimezone: true }),
+  requiresDualApproval: boolean("requires_dual_approval").notNull().default(false),
+  firstApprovedBy: uuid("first_approved_by"),
+  firstApprovedAt: timestamp("first_approved_at", { withTimezone: true }),
+  secondApprovedBy: uuid("second_approved_by"),
+  secondApprovedAt: timestamp("second_approved_at", { withTimezone: true }),
   paidAt: timestamp("paid_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

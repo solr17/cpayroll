@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { payRuns, payslips, cpfRecords, employees } from "@/lib/db/schema";
+import { payRuns, payslips, cpfRecords, employees, salaryRecords } from "@/lib/db/schema";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { requireRole } from "@/lib/auth/session";
 import type { ApiResponse } from "@/types";
@@ -68,6 +68,12 @@ export async function GET(request: NextRequest) {
 
       case "ytd": {
         const targetYear = year ? parseInt(year, 10) : new Date().getFullYear();
+        if (isNaN(targetYear) || targetYear < 2020 || targetYear > 2100) {
+          return NextResponse.json(
+            { success: false, error: "Invalid year parameter" } satisfies ApiResponse,
+            { status: 400 },
+          );
+        }
         const data = await getYtdReport(session.companyId, targetYear);
         return NextResponse.json({ success: true, data } satisfies ApiResponse);
       }
@@ -86,6 +92,38 @@ export async function GET(request: NextRequest) {
       case "ir8a": {
         const targetYear = year ? parseInt(year, 10) : new Date().getFullYear() - 1;
         const data = await getIr8aReport(session.companyId, targetYear);
+        return NextResponse.json({ success: true, data } satisfies ApiResponse);
+      }
+
+      case "bank_file": {
+        if (!payRunId) {
+          return NextResponse.json(
+            { success: false, error: "payRunId is required" } satisfies ApiResponse,
+            { status: 400 },
+          );
+        }
+        const data = await getBankFileReport(payRunId, session.companyId);
+        return NextResponse.json({ success: true, data } satisfies ApiResponse);
+      }
+
+      case "cost_to_company": {
+        if (!payRunId) {
+          return NextResponse.json(
+            { success: false, error: "payRunId is required" } satisfies ApiResponse,
+            { status: 400 },
+          );
+        }
+        const data = await getCostToCompanyReport(payRunId, session.companyId);
+        return NextResponse.json({ success: true, data } satisfies ApiResponse);
+      }
+
+      case "headcount": {
+        const data = await getHeadcountReport(session.companyId);
+        return NextResponse.json({ success: true, data } satisfies ApiResponse);
+      }
+
+      case "employee_master": {
+        const data = await getEmployeeMasterReport(session.companyId);
         return NextResponse.json({ success: true, data } satisfies ApiResponse);
       }
 
@@ -454,5 +492,250 @@ async function getIr8aReport(companyId: string, year: number) {
       totalEmployeeCpfCents: r.totalEmployeeCpfCents,
       monthsWorked: r.monthsWorked,
     })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Bank File Report
+// ---------------------------------------------------------------------------
+
+async function getBankFileReport(payRunId: string, companyId: string) {
+  const [run] = await db
+    .select()
+    .from(payRuns)
+    .where(and(eq(payRuns.id, payRunId), eq(payRuns.companyId, companyId)))
+    .limit(1);
+  if (!run) throw new Error("Pay run not found");
+
+  const rows = await db
+    .select({
+      employeeName: employees.fullName,
+      nricLast4: employees.nricLast4,
+      bankJsonEncrypted: employees.bankJsonEncrypted,
+      netPayCents: payslips.netPayCents,
+    })
+    .from(payslips)
+    .innerJoin(employees, eq(payslips.employeeId, employees.id))
+    .where(eq(payslips.payRunId, payRunId))
+    .orderBy(employees.fullName);
+
+  // Group by bank
+  const bankGroups = new Map<
+    string,
+    Array<{
+      employeeName: string;
+      nricLast4: string;
+      accountMasked: string;
+      netPayCents: number;
+    }>
+  >();
+
+  for (const row of rows) {
+    let bankName = "Unknown";
+    let accountMasked = "****";
+
+    if (row.bankJsonEncrypted) {
+      try {
+        // Dynamically import decrypt to avoid importing at module level
+        const { decrypt } = await import("@/lib/crypto/aes");
+        const bankJson = JSON.parse(decrypt(row.bankJsonEncrypted)) as {
+          bankName: string;
+          accountNumber: string;
+        };
+        bankName = bankJson.bankName || "Unknown";
+        const acct = bankJson.accountNumber || "";
+        accountMasked = acct.length > 4 ? "****" + acct.slice(-4) : acct;
+      } catch {
+        // Decryption failed — use defaults
+      }
+    }
+
+    const group = bankGroups.get(bankName) ?? [];
+    group.push({
+      employeeName: row.employeeName,
+      nricLast4: row.nricLast4,
+      accountMasked,
+      netPayCents: row.netPayCents,
+    });
+    bankGroups.set(bankName, group);
+  }
+
+  const banks = Array.from(bankGroups.entries()).map(([bankName, employees]) => ({
+    bankName,
+    employeeCount: employees.length,
+    totalNetPayCents: employees.reduce((sum, e) => sum + e.netPayCents, 0),
+    employees,
+  }));
+
+  return {
+    reportType: "bank_file",
+    period: { start: run.periodStart, end: run.periodEnd },
+    banks,
+    grandTotalCents: banks.reduce((sum, b) => sum + b.totalNetPayCents, 0),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Cost to Company Report
+// ---------------------------------------------------------------------------
+
+async function getCostToCompanyReport(payRunId: string, companyId: string) {
+  const [run] = await db
+    .select()
+    .from(payRuns)
+    .where(and(eq(payRuns.id, payRunId), eq(payRuns.companyId, companyId)))
+    .limit(1);
+  if (!run) throw new Error("Pay run not found");
+
+  const rows = await db
+    .select({
+      employeeName: employees.fullName,
+      nricLast4: employees.nricLast4,
+      department: employees.department,
+      grossPayCents: payslips.grossPayCents,
+      employerCpfCents: payslips.employerCpfCents,
+      sdlCents: payslips.sdlCents,
+      fwlCents: payslips.fwlCents,
+      shgCents: payslips.shgCents,
+      employerTotalCostCents: payslips.employerTotalCostCents,
+    })
+    .from(payslips)
+    .innerJoin(employees, eq(payslips.employeeId, employees.id))
+    .where(eq(payslips.payRunId, payRunId))
+    .orderBy(employees.fullName);
+
+  const totals = rows.reduce(
+    (acc: Record<string, number>, r: (typeof rows)[number]) => ({
+      grossPayCents: acc.grossPayCents + r.grossPayCents,
+      employerCpfCents: acc.employerCpfCents + r.employerCpfCents,
+      sdlCents: acc.sdlCents + r.sdlCents,
+      fwlCents: acc.fwlCents + r.fwlCents,
+      shgCents: acc.shgCents + r.shgCents,
+      employerTotalCostCents: acc.employerTotalCostCents + r.employerTotalCostCents,
+    }),
+    {
+      grossPayCents: 0,
+      employerCpfCents: 0,
+      sdlCents: 0,
+      fwlCents: 0,
+      shgCents: 0,
+      employerTotalCostCents: 0,
+    },
+  );
+
+  return {
+    reportType: "cost_to_company",
+    period: { start: run.periodStart, end: run.periodEnd },
+    rows: rows.map((r: (typeof rows)[number]) => ({
+      ...r,
+      department: r.department ?? "Unassigned",
+      totalCostCents: r.grossPayCents + r.employerCpfCents + r.sdlCents + r.fwlCents + r.shgCents,
+    })),
+    totals,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Headcount Report
+// ---------------------------------------------------------------------------
+
+async function getHeadcountReport(companyId: string) {
+  const allEmployees = await db
+    .select({
+      id: employees.id,
+      status: employees.status,
+      department: employees.department,
+      employmentType: employees.employmentType,
+    })
+    .from(employees)
+    .where(eq(employees.companyId, companyId));
+
+  // By status
+  const byStatus: Record<string, number> = {};
+  for (const emp of allEmployees) {
+    byStatus[emp.status] = (byStatus[emp.status] ?? 0) + 1;
+  }
+
+  // By department
+  const byDepartment: Record<string, number> = {};
+  for (const emp of allEmployees) {
+    const dept = emp.department ?? "Unassigned";
+    byDepartment[dept] = (byDepartment[dept] ?? 0) + 1;
+  }
+
+  // By employment type
+  const byEmploymentType: Record<string, number> = {};
+  for (const emp of allEmployees) {
+    byEmploymentType[emp.employmentType] = (byEmploymentType[emp.employmentType] ?? 0) + 1;
+  }
+
+  return {
+    reportType: "headcount",
+    totalEmployees: allEmployees.length,
+    byStatus: Object.entries(byStatus)
+      .map(([status, count]) => ({ status, count }))
+      .sort((a, b) => b.count - a.count),
+    byDepartment: Object.entries(byDepartment)
+      .map(([department, count]) => ({ department, count }))
+      .sort((a, b) => b.count - a.count),
+    byEmploymentType: Object.entries(byEmploymentType)
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Employee Master Report
+// ---------------------------------------------------------------------------
+
+async function getEmployeeMasterReport(companyId: string) {
+  const rows = await db
+    .select({
+      fullName: employees.fullName,
+      nricLast4: employees.nricLast4,
+      department: employees.department,
+      position: employees.position,
+      hireDate: employees.hireDate,
+      status: employees.status,
+      employmentType: employees.employmentType,
+      citizenshipStatus: employees.citizenshipStatus,
+      gender: employees.gender,
+      dob: employees.dob,
+      email: employees.email,
+      mobile: employees.mobile,
+    })
+    .from(employees)
+    .where(eq(employees.companyId, companyId))
+    .orderBy(employees.fullName);
+
+  // Fetch latest salary for each employee
+  const employeeIds = await db
+    .select({ id: employees.id, fullName: employees.fullName })
+    .from(employees)
+    .where(eq(employees.companyId, companyId));
+
+  const salaryMap = new Map<string, number>();
+  for (const emp of employeeIds) {
+    const [latestSalary] = await db
+      .select({ basicSalaryCents: salaryRecords.basicSalaryCents })
+      .from(salaryRecords)
+      .where(eq(salaryRecords.employeeId, emp.id))
+      .orderBy(desc(salaryRecords.effectiveDate))
+      .limit(1);
+    if (latestSalary) {
+      salaryMap.set(emp.fullName, latestSalary.basicSalaryCents);
+    }
+  }
+
+  return {
+    reportType: "employee_master",
+    rows: rows.map((r: (typeof rows)[number]) => ({
+      ...r,
+      department: r.department ?? "Unassigned",
+      position: r.position ?? "-",
+      nricDisplay: "\u2022\u2022\u2022\u2022\u2022" + r.nricLast4,
+      basicSalaryCents: salaryMap.get(r.fullName) ?? null,
+    })),
+    totalCount: rows.length,
   };
 }

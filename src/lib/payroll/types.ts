@@ -1,4 +1,5 @@
 import type { CitizenshipStatus } from "@/types";
+import type { ShgFundType, ShgResult } from "./shg";
 
 /** CPF rate entry from the config table */
 export interface CpfRateEntry {
@@ -69,6 +70,9 @@ export interface VariablePayItems {
   unpaidLeaveDays: number;
 }
 
+/** Pro-ration method */
+export type ProrationMethod = "calendar" | "working";
+
 /** Full employee payroll input for one month */
 export interface EmployeePayrollInput {
   employeeId: string;
@@ -82,6 +86,8 @@ export interface EmployeePayrollInput {
   hireDate: string;
   terminationDate: string | null;
   fwlRateCents: number;
+  shgFundType: ShgFundType;
+  shgOptedOut: boolean;
   variableItems: VariablePayItems;
   ytdOwCents: number;
   ytdAwCents: number;
@@ -90,11 +96,15 @@ export interface EmployeePayrollInput {
   periodEnd: string;
   totalDaysInMonth: number;
   rates: CpfRateEntry[];
+  prorationMethod?: ProrationMethod;
+  /** Public holiday dates in YYYY-MM-DD format (used for working-day proration) */
+  publicHolidayDates?: string[];
 }
 
 /** Full payroll result for one employee */
 export interface EmployeePayrollResult {
   employeeId: string;
+  daysWorked: number;
   basicSalaryCents: number;
   proratedBasicCents: number;
   fixedAllowancesCents: number;
@@ -111,6 +121,7 @@ export interface EmployeePayrollResult {
   cpf: CpfCalculationResult;
   sdl: SdlResult;
   fwl: FwlResult;
+  shg: ShgResult;
   otherDeductionsCents: number;
   netPayCents: number;
   employerTotalCostCents: number;

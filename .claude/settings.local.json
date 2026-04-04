@@ -28,7 +28,26 @@
       "Bash(taskkill //F //IM node.exe)",
       "Bash(curl:*)",
       "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_27pOQEUIyxaL@ep-fragrant-wind-a11nylzt-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require\" npx tsx:*)",
-      "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_27pOQEUIyxaL@ep-fragrant-wind-a11nylzt-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require\" NRIC_HMAC_KEY=\"f5ce94da47a6e2754ee2825d4aa3e6ff82fd5892e7467490ed815a4f6f53f39e\" ENCRYPTION_KEY=\"9cf8bc8e947a7c32b7265528ca535b0b898d5afa6cc6538f0020627cfbfd8353\" npx tsx:*)"
+      "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_27pOQEUIyxaL@ep-fragrant-wind-a11nylzt-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require\" NRIC_HMAC_KEY=\"f5ce94da47a6e2754ee2825d4aa3e6ff82fd5892e7467490ed815a4f6f53f39e\" ENCRYPTION_KEY=\"9cf8bc8e947a7c32b7265528ca535b0b898d5afa6cc6538f0020627cfbfd8353\" npx tsx:*)",
+      "Bash(git remote:*)",
+      "Bash(git push:*)",
+      "Bash(npx dotenv:*)",
+      "WebFetch(domain:cpayroll.vercel.app)",
+      "Bash(npx vercel:*)",
+      "Bash(git pull:*)",
+      "Bash(xargs grep:*)",
+      "Bash(grep:*)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(npx next:*)",
+      "Bash(mkdir -p C:/Users/admin/Payroll/src/app/api/payroll/payslips/\\\\[id\\\\]/pdf)",
+      "Bash(mkdir -p C:/Users/admin/Payroll/src/app/api/payroll/pay-runs/\\\\[id\\\\]/pdf-batch)",
+      "Bash(mkdir -p C:/Users/admin/Payroll/src/app/api/payroll/pay-runs/\\\\[id\\\\]/email)",
+      "Bash(xargs ls:*)",
+      "Bash(xargs -I {} bash -c 'if [[ -d {} ]]; then echo \"DIR: {}\"; else echo \"FILE: {}\"; fi')",
+      "Bash(xargs cat:*)",
+      "Bash(npx cross-env:*)",
+      "Bash(npm i:*)",
+      "Bash(vercel env:*)"
     ]
   }
 }

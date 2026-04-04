@@ -1,4 +1,14 @@
-import { pgTable, uuid, text, date, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  uuid,
+  text,
+  date,
+  timestamp,
+  pgEnum,
+  boolean,
+  integer,
+  jsonb,
+} from "drizzle-orm/pg-core";
 import { companies } from "./companies";
 
 export const citizenshipStatusEnum = pgEnum("citizenship_status", [
@@ -46,6 +56,18 @@ export const employees = pgTable("employees", {
   workPassType: text("work_pass_type"),
   workPassExpiry: date("work_pass_expiry"),
   taxRefNumber: text("tax_ref_number"),
+  race: text("race"),
+  religion: text("religion"),
+  shgOptedOut: boolean("shg_opted_out").notNull().default(false),
+  // IR8A/IR8S fields
+  isDirector: boolean("is_director").notNull().default(false),
+  directorFeeCents: integer("director_fee_cents").default(0),
+  benefitsInKindJson: jsonb("benefits_in_kind_json"), // array of {type, amountCents, description}
+  transportAllowanceCents: integer("transport_allowance_cents").default(0),
+  entertainmentAllowanceCents: integer("entertainment_allowance_cents").default(0),
+  voluntaryCpfCents: integer("voluntary_cpf_cents").default(0),
+  esopGainsCents: integer("esop_gains_cents").default(0),
+  taxBorneByEmployerCents: integer("tax_borne_by_employer_cents").default(0),
   status: employeeStatusEnum("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

@@ -8,7 +8,7 @@ export type EmploymentType = "FT" | "PT" | "CONTRACT" | "LOCUM";
 export type EmployeeStatus = "active" | "probation" | "terminated";
 
 /** User roles for RBAC */
-export type UserRole = "owner" | "admin" | "employee";
+export type UserRole = "owner" | "admin" | "payroll_operator" | "report_viewer" | "employee";
 
 /** Pay run lifecycle states */
 export type PayRunStatus = "draft" | "calculated" | "reviewed" | "approved" | "paid" | "filed";

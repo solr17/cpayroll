@@ -15,7 +15,27 @@ import type { EmployeePayrollInput, EmployeePayrollResult } from "./types";
 import { calculateCpf, adjustForLowWage } from "./cpf";
 import { calculateSdl } from "./sdl";
 import { calculateFwl } from "./fwl";
+import { calculateShg } from "./shg";
 import { prorateCents, overtimeHourlyRateCents, addCents, subtractCents } from "@/lib/utils/money";
+
+/**
+ * Count working days (exclude Saturdays, Sundays, and public holidays)
+ * between two dates inclusive.
+ */
+function countWorkingDays(start: Date, end: Date, publicHolidayDates: string[]): number {
+  const holidaySet = new Set(publicHolidayDates);
+  let count = 0;
+  const current = new Date(start);
+  while (current <= end) {
+    const day = current.getDay();
+    const dateStr = current.toISOString().slice(0, 10);
+    if (day !== 0 && day !== 6 && !holidaySet.has(dateStr)) {
+      count++;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  return count;
+}
 
 export function calculateEmployeePayroll(input: EmployeePayrollInput): EmployeePayrollResult {
   const {
@@ -29,6 +49,8 @@ export function calculateEmployeePayroll(input: EmployeePayrollInput): EmployeeP
     hireDate,
     terminationDate,
     fwlRateCents,
+    shgFundType,
+    shgOptedOut,
     variableItems,
     ytdOwCents,
     ytdAwCents,
@@ -37,41 +59,59 @@ export function calculateEmployeePayroll(input: EmployeePayrollInput): EmployeeP
     periodEnd,
     totalDaysInMonth,
     rates,
+    prorationMethod = "calendar",
+    publicHolidayDates = [],
   } = input;
 
   // === Step 1: Gross Pay Assembly ===
 
   // Pro-rate basic salary for mid-month join/leave
-  let daysWorked = totalDaysInMonth;
   const periodStartDate = new Date(periodStart);
   const periodEndDate = new Date(periodEnd);
   const hireDateObj = new Date(hireDate);
   const termDateObj = terminationDate ? new Date(terminationDate) : null;
 
-  if (hireDateObj > periodStartDate) {
-    daysWorked = Math.max(
-      0,
-      Math.floor((periodEndDate.getTime() - hireDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1,
-    );
-  }
-  if (termDateObj && termDateObj < periodEndDate) {
-    const startForCalc = hireDateObj > periodStartDate ? hireDateObj : periodStartDate;
-    daysWorked = Math.max(
-      0,
-      Math.floor((termDateObj.getTime() - startForCalc.getTime()) / (1000 * 60 * 60 * 24)) + 1,
-    );
+  // Determine effective start/end for this employee in the period
+  const effectiveStart = hireDateObj > periodStartDate ? hireDateObj : periodStartDate;
+  const effectiveEnd = termDateObj && termDateObj < periodEndDate ? termDateObj : periodEndDate;
+
+  let daysWorked: number;
+  let totalProrationDays: number;
+
+  if (prorationMethod === "working") {
+    // Working-day proration: exclude weekends and public holidays
+    totalProrationDays = countWorkingDays(periodStartDate, periodEndDate, publicHolidayDates);
+    daysWorked = countWorkingDays(effectiveStart, effectiveEnd, publicHolidayDates);
+  } else {
+    // Calendar-day proration (default)
+    totalProrationDays = totalDaysInMonth;
+    if (hireDateObj > periodStartDate) {
+      daysWorked = Math.max(
+        0,
+        Math.floor((periodEndDate.getTime() - hireDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1,
+      );
+    } else {
+      daysWorked = totalDaysInMonth;
+    }
+    if (termDateObj && termDateObj < periodEndDate) {
+      const startForCalc = hireDateObj > periodStartDate ? hireDateObj : periodStartDate;
+      daysWorked = Math.max(
+        0,
+        Math.floor((termDateObj.getTime() - startForCalc.getTime()) / (1000 * 60 * 60 * 24)) + 1,
+      );
+    }
   }
 
   const proratedBasicCents =
-    daysWorked < totalDaysInMonth
-      ? prorateCents(basicSalaryCents, daysWorked, totalDaysInMonth)
+    daysWorked < totalProrationDays
+      ? prorateCents(basicSalaryCents, daysWorked, totalProrationDays)
       : basicSalaryCents;
 
   // Fixed allowances (pro-rated same as basic if mid-month)
   const fixedAllowancesCents = fixedAllowances.reduce((sum, a) => {
     const amount =
-      daysWorked < totalDaysInMonth
-        ? prorateCents(a.amountCents, daysWorked, totalDaysInMonth)
+      daysWorked < totalProrationDays
+        ? prorateCents(a.amountCents, daysWorked, totalProrationDays)
         : a.amountCents;
     return sum + amount;
   }, 0);
@@ -86,7 +126,7 @@ export function calculateEmployeePayroll(input: EmployeePayrollInput): EmployeeP
   // Unpaid leave deduction
   const unpaidLeaveDeductionCents =
     variableItems.unpaidLeaveDays > 0
-      ? prorateCents(basicSalaryCents, variableItems.unpaidLeaveDays, totalDaysInMonth)
+      ? prorateCents(basicSalaryCents, variableItems.unpaidLeaveDays, totalProrationDays)
       : 0;
 
   // Gross pay
@@ -106,8 +146,8 @@ export function calculateEmployeePayroll(input: EmployeePayrollInput): EmployeeP
     ...fixedAllowances.map((a) => ({
       ...a,
       amountCents:
-        daysWorked < totalDaysInMonth
-          ? prorateCents(a.amountCents, daysWorked, totalDaysInMonth)
+        daysWorked < totalProrationDays
+          ? prorateCents(a.amountCents, daysWorked, totalProrationDays)
           : a.amountCents,
     })),
     ...variableItems.additionalAllowances,
@@ -145,6 +185,13 @@ export function calculateEmployeePayroll(input: EmployeePayrollInput): EmployeeP
   // === Step 5: FWL ===
   const fwl = calculateFwl(citizenshipStatus, fwlRateCents);
 
+  // === Step 5b: SHG ===
+  // SHG only applies to SC and PR employees (not foreigners)
+  const shgApplies = citizenshipStatus !== "FW";
+  const shg = shgApplies
+    ? calculateShg(shgFundType, grossPayCents, shgOptedOut)
+    : { fundType: shgFundType, contributionCents: 0 };
+
   // === Step 6: Net Pay ===
   const otherDeductionsCents = variableItems.additionalDeductions.reduce(
     (sum, d) => sum + d.amountCents,
@@ -153,7 +200,7 @@ export function calculateEmployeePayroll(input: EmployeePayrollInput): EmployeeP
 
   const netPayCents = subtractCents(
     grossPayCents,
-    addCents(cpf.employeeCpfCents, otherDeductionsCents),
+    addCents(cpf.employeeCpfCents, shg.contributionCents, otherDeductionsCents),
   );
 
   // === Step 7: Employer Total Cost ===
@@ -166,6 +213,7 @@ export function calculateEmployeePayroll(input: EmployeePayrollInput): EmployeeP
 
   return {
     employeeId,
+    daysWorked,
     basicSalaryCents,
     proratedBasicCents,
     fixedAllowancesCents,
@@ -182,6 +230,7 @@ export function calculateEmployeePayroll(input: EmployeePayrollInput): EmployeeP
     cpf,
     sdl,
     fwl,
+    shg,
     otherDeductionsCents,
     netPayCents,
     employerTotalCostCents,

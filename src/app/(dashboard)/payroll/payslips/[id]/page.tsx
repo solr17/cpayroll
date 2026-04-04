@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { centsToCurrency } from "@/lib/utils/money";
+import { apiFetch } from "@/lib/fetch";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -79,7 +80,7 @@ interface PayslipResponse {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-SG", {
+  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-SG", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -143,6 +144,12 @@ export default function PayslipViewerPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
+  const [payNowSvg, setPayNowSvg] = useState("");
+  const [payNowAmount, setPayNowAmount] = useState("");
+  const [payNowRef, setPayNowRef] = useState("");
+  const [payNowLoading, setPayNowLoading] = useState(false);
+  const [payNowError, setPayNowError] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -163,8 +170,9 @@ export default function PayslipViewerPage() {
     load();
   }, [params.id]);
 
-  async function handleDownloadHtml() {
+  const handleDownloadHtml = useCallback(async () => {
     setDownloading(true);
+    setDownloadError("");
     try {
       const res = await fetch(`/api/payroll/payslips/${params.id}/export`);
       if (!res.ok) {
@@ -181,11 +189,34 @@ export default function PayslipViewerPage() {
       document.body.removeChild(anchor);
       URL.revokeObjectURL(url);
     } catch {
-      alert("Failed to download payslip HTML");
+      setDownloadError("Failed to download payslip HTML");
     } finally {
       setDownloading(false);
     }
-  }
+  }, [params.id]);
+
+  const handlePayNowQr = useCallback(async () => {
+    setPayNowLoading(true);
+    setPayNowError("");
+    try {
+      const res = await apiFetch("/api/payroll/paynow", {
+        method: "POST",
+        body: JSON.stringify({ payslipId: params.id }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setPayNowSvg(json.data.qrSvg);
+        setPayNowAmount(`S$${Number(json.data.amount).toFixed(2)}`);
+        setPayNowRef(json.data.reference);
+      } else {
+        setPayNowError(json.error ?? "Failed to generate PayNow QR");
+      }
+    } catch {
+      setPayNowError("Failed to generate PayNow QR");
+    } finally {
+      setPayNowLoading(false);
+    }
+  }, [params.id]);
 
   // Loading state
   if (loading) {
@@ -275,7 +306,7 @@ export default function PayslipViewerPage() {
         {/* Navigation & actions */}
         <div className="no-print mb-6 flex items-center justify-between">
           <Link
-            href={`/payroll/pay-runs/${payslip.payRunId}`}
+            href={`/payroll/${payslip.payRunId}`}
             className="text-sm text-blue-600 hover:underline"
           >
             &larr; Back to Pay Run
@@ -295,6 +326,7 @@ export default function PayslipViewerPage() {
               {downloading ? "Downloading..." : "Download HTML"}
             </button>
           </div>
+          {downloadError && <p className="mt-2 text-sm text-red-600">{downloadError}</p>}
         </div>
 
         {/* ── Payslip Header ──────────────────────────────────────────── */}
@@ -452,6 +484,54 @@ export default function PayslipViewerPage() {
             <LineItem label="YTD Ordinary Wages" value={centsToCurrency(cpfRecord.ytdOwCents)} />
             <LineItem label="YTD Additional Wages" value={centsToCurrency(cpfRecord.ytdAwCents)} />
           </div>
+        </div>
+
+        {/* ── PayNow QR ────────────────────────────────────────────────── */}
+        <div className="payslip-card mb-6 rounded-xl bg-white p-6 shadow-sm">
+          <SectionHeading>PayNow QR Code</SectionHeading>
+
+          {!payNowSvg && !payNowLoading && (
+            <div className="text-center">
+              <p className="mb-4 text-sm text-gray-500">
+                Generate a PayNow QR code for this payslip. Employees can scan it with their banking
+                app to verify payment details.
+              </p>
+              <button
+                onClick={handlePayNowQr}
+                disabled={payNowLoading}
+                className="rounded-lg bg-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-purple-700 disabled:opacity-50"
+              >
+                Generate PayNow QR
+              </button>
+            </div>
+          )}
+
+          {payNowLoading && (
+            <div className="flex items-center justify-center py-8">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-purple-600 border-t-transparent" />
+              <span className="ml-3 text-gray-500">Generating QR code...</span>
+            </div>
+          )}
+
+          {payNowError && (
+            <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700">{payNowError}</div>
+          )}
+
+          {payNowSvg && (
+            <div className="flex flex-col items-center gap-4">
+              <div
+                className="rounded-lg border border-gray-200 bg-white p-4"
+                dangerouslySetInnerHTML={{ __html: payNowSvg }}
+              />
+              <div className="text-center">
+                <p className="text-lg font-semibold text-gray-900">{payNowAmount}</p>
+                <p className="text-sm text-gray-500">Ref: {payNowRef}</p>
+              </div>
+              <p className="text-xs text-gray-400">
+                Scan with any Singapore banking app that supports PayNow
+              </p>
+            </div>
+          )}
         </div>
 
         {/* ── Footer ──────────────────────────────────────────────────── */}

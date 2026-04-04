@@ -2,12 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { trackEvent } from "@/lib/analytics";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [twoFaToken, setTwoFaToken] = useState<string | null>(null);
+  const [twoFaCode, setTwoFaCode] = useState("");
+  const [useBackupCode, setUseBackupCode] = useState(false);
   const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent) {
@@ -29,6 +34,41 @@ export default function LoginPage() {
         return;
       }
 
+      if (data.requires2fa) {
+        setTwoFaToken(data.twoFaToken);
+        return;
+      }
+
+      trackEvent("user_logged_in");
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleTwoFa(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/2fa/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ twoFaToken, code: twoFaCode }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error ?? "Verification failed");
+        return;
+      }
+
+      trackEvent("user_logged_in", { method: "2fa" });
       router.push("/dashboard");
       router.refresh();
     } catch {
@@ -183,73 +223,188 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-700">
-                Email address
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="you@clinic.com"
-                className="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm transition-colors duration-150 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-700">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="Enter your password"
-                className="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm transition-colors duration-150 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="mt-2 flex w-full items-center justify-center rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-150 hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading ? (
+          {/* 2FA Form */}
+          {twoFaToken ? (
+            <form onSubmit={handleTwoFa} className="space-y-5">
+              {useBackupCode ? (
                 <>
-                  <svg
-                    className="mr-2 h-4 w-4 animate-spin text-white/70"
-                    fill="none"
-                    viewBox="0 0 24 24"
+                  <p className="text-sm text-slate-600">Enter one of your backup codes.</p>
+                  <div>
+                    <label htmlFor="twoFaCode" className="block text-sm font-medium text-slate-700">
+                      Backup Code
+                    </label>
+                    <input
+                      id="twoFaCode"
+                      type="text"
+                      autoComplete="off"
+                      maxLength={9}
+                      value={twoFaCode}
+                      onChange={(e) => {
+                        // Allow alphanumeric and hyphen, uppercase
+                        const val = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "");
+                        setTwoFaCode(val.slice(0, 9));
+                      }}
+                      required
+                      placeholder="XXXX-XXXX"
+                      className="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-center font-mono text-lg tracking-[0.3em] text-slate-900 shadow-sm transition-colors duration-150 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading || twoFaCode.length !== 9}
+                    className="mt-2 flex w-full items-center justify-center rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-150 hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                  </svg>
-                  Signing in...
+                    {loading ? "Verifying..." : "Verify Backup Code"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseBackupCode(false);
+                      setTwoFaCode("");
+                      setError("");
+                    }}
+                    className="w-full text-center text-sm text-slate-500 hover:text-slate-700"
+                  >
+                    Use authenticator app instead
+                  </button>
                 </>
               ) : (
-                "Sign In"
+                <>
+                  <p className="text-sm text-slate-600">
+                    Enter the 6-digit code from your authenticator app.
+                  </p>
+                  <div>
+                    <label htmlFor="twoFaCode" className="block text-sm font-medium text-slate-700">
+                      Verification Code
+                    </label>
+                    <input
+                      id="twoFaCode"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      value={twoFaCode}
+                      onChange={(e) => setTwoFaCode(e.target.value.replace(/\D/g, ""))}
+                      required
+                      placeholder="000000"
+                      className="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-center font-mono text-lg tracking-[0.3em] text-slate-900 shadow-sm transition-colors duration-150 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading || twoFaCode.length !== 6}
+                    className="mt-2 flex w-full items-center justify-center rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-150 hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {loading ? "Verifying..." : "Verify"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseBackupCode(true);
+                      setTwoFaCode("");
+                      setError("");
+                    }}
+                    className="w-full text-center text-sm text-slate-500 hover:text-slate-700"
+                  >
+                    Use a backup code
+                  </button>
+                </>
               )}
-            </button>
-          </form>
+              <button
+                type="button"
+                onClick={() => {
+                  setTwoFaToken(null);
+                  setTwoFaCode("");
+                  setUseBackupCode(false);
+                  setError("");
+                }}
+                className="w-full text-center text-sm text-slate-500 hover:text-slate-700"
+              >
+                Back to login
+              </button>
+            </form>
+          ) : (
+            /* Login Form */
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-slate-700">
+                  Email address
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="you@clinic.com"
+                  className="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm transition-colors duration-150 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-slate-700">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="Enter your password"
+                  className="mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm transition-colors duration-150 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                />
+                <div className="mt-1.5 text-right">
+                  <a href="/forgot-password" className="text-sm text-sky-600 hover:text-sky-700">
+                    Forgot password?
+                  </a>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="mt-2 flex w-full items-center justify-center rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-150 hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading ? (
+                  <>
+                    <svg
+                      className="mr-2 h-4 w-4 animate-spin text-white/70"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Signing in...
+                  </>
+                ) : (
+                  "Sign In"
+                )}
+              </button>
+            </form>
+          )}
+
+          {/* Sign up link */}
+          <p className="mt-8 text-center text-sm text-slate-500">
+            Don&apos;t have an account?{" "}
+            <Link href="/register" className="font-medium text-sky-600 hover:text-sky-500">
+              Sign up
+            </Link>
+          </p>
 
           {/* Footer */}
           <p className="mt-10 text-center text-xs text-slate-400">

@@ -43,3 +43,5 @@ data/
 # generated
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { verifySessionToken } from "./session-token";
 import type { UserRole } from "@/types";
 
 export interface SessionUser {
@@ -13,8 +14,37 @@ export interface SessionUser {
 }
 
 /**
- * Get current session user from cookie.
- * Simple session token approach for MVP — upgrade to NextAuth in production.
+ * Role-based permissions map.
+ * owner gets wildcard '*' (everything).
+ */
+const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
+  owner: ["*"],
+  admin: ["employees", "payroll", "reports", "settings", "pay_items", "gl"],
+  payroll_operator: ["employees.read", "payroll.write", "payroll.read", "reports.read"],
+  report_viewer: ["employees.read", "reports.read"],
+  employee: ["self.read"],
+};
+
+/**
+ * Check if a role has a specific permission.
+ * Supports wildcard '*' for owner and dotted sub-permissions.
+ */
+export function hasPermission(role: UserRole, permission: string): boolean {
+  const perms = ROLE_PERMISSIONS[role];
+  if (!perms) return false;
+
+  if (perms.includes("*")) return true;
+  if (perms.includes(permission)) return true;
+
+  const parentPerm = permission.split(".")[0];
+  if (parentPerm && perms.includes(parentPerm)) return true;
+
+  return false;
+}
+
+/**
+ * Get current session user from signed cookie.
+ * Verifies HMAC signature and expiry before querying DB.
  */
 export async function getSession(): Promise<SessionUser | null> {
   const cookieStore = await cookies();
@@ -22,9 +52,8 @@ export async function getSession(): Promise<SessionUser | null> {
   if (!sessionToken) return null;
 
   try {
-    const payload = JSON.parse(Buffer.from(sessionToken, "base64").toString("utf-8")) as {
-      userId: string;
-    };
+    const payload = verifySessionToken(sessionToken);
+    if (!payload) return null;
 
     const [user] = await db
       .select({

@@ -1,7 +1,13 @@
 import { pgTable, uuid, text, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { companies } from "./companies";
 
-export const userRoleEnum = pgEnum("user_role", ["owner", "admin", "employee"]);
+export const userRoleEnum = pgEnum("user_role", [
+  "owner",
+  "admin",
+  "payroll_operator",
+  "report_viewer",
+  "employee",
+]);
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -14,6 +20,7 @@ export const users = pgTable("users", {
   role: userRoleEnum("role").notNull().default("employee"),
   totpSecret: text("totp_secret"),
   totpEnabled: text("totp_enabled").default("false"),
+  backupCodes: text("backup_codes"), // JSON array of SHA-256 hashed backup codes
   employeeId: uuid("employee_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

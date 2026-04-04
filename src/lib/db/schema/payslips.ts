@@ -21,6 +21,8 @@ export const payslips = pgTable("payslips", {
   employeeCpfCents: integer("employee_cpf_cents").notNull(),
   sdlCents: integer("sdl_cents").notNull(),
   fwlCents: integer("fwl_cents").notNull().default(0),
+  shgCents: integer("shg_cents").notNull().default(0),
+  shgFundType: text("shg_fund_type"),
   netPayCents: integer("net_pay_cents").notNull(),
   employerTotalCostCents: integer("employer_total_cost_cents").notNull(),
   pdfFileKey: text("pdf_file_key"),

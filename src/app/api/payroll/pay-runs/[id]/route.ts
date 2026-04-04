@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth/session";
 import { getPayRun, getPayRunPayslips, deletePayRun } from "@/lib/payroll/pay-run";
 import { logAudit } from "@/lib/audit/log";
+import { db } from "@/lib/db";
+import { users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import type { ApiResponse } from "@/types";
 
 /** GET /api/payroll/pay-runs/[id] — Get a single pay run with payslips */
@@ -20,9 +23,30 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     const payslips = await getPayRunPayslips(id);
 
+    // Look up approver names for dual approval display
+    let firstApproverName: string | null = null;
+    let secondApproverName: string | null = null;
+
+    if (run.firstApprovedBy) {
+      const [u] = await db
+        .select({ name: users.name })
+        .from(users)
+        .where(eq(users.id, run.firstApprovedBy))
+        .limit(1);
+      firstApproverName = u?.name ?? null;
+    }
+    if (run.secondApprovedBy) {
+      const [u] = await db
+        .select({ name: users.name })
+        .from(users)
+        .where(eq(users.id, run.secondApprovedBy))
+        .limit(1);
+      secondApproverName = u?.name ?? null;
+    }
+
     return NextResponse.json({
       success: true,
-      data: { ...run, payslips },
+      data: { ...run, payslips, firstApproverName, secondApproverName },
     } satisfies ApiResponse);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal server error";

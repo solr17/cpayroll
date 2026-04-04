@@ -1,0 +1,1234 @@
+{
+  "id": "ca3ffc87-3c96-4e2a-9f72-4500cc608911",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.audit_log": {
+      "name": "audit_log",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_type": {
+          "name": "entity_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "old_value": {
+          "name": "old_value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "new_value": {
+          "name": "new_value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ip_address": {
+          "name": "ip_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_agent": {
+          "name": "user_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.companies": {
+      "name": "companies",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "uen": {
+          "name": "uen",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "address_json": {
+          "name": "address_json",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bank_account_json": {
+          "name": "bank_account_json",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cpf_submission_number": {
+          "name": "cpf_submission_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "iras_tax_ref": {
+          "name": "iras_tax_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pay_day": {
+          "name": "pay_day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 25
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "companies_uen_unique": {
+          "name": "companies_uen_unique",
+          "nullsNotDistinct": false,
+          "columns": ["uen"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.cpf_rate_tables": {
+      "name": "cpf_rate_tables",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "effective_date": {
+          "name": "effective_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status_type": {
+          "name": "status_type",
+          "type": "cpf_status_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "age_band_min": {
+          "name": "age_band_min",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "age_band_max": {
+          "name": "age_band_max",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employer_rate": {
+          "name": "employer_rate",
+          "type": "numeric(6, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employee_rate": {
+          "name": "employee_rate",
+          "type": "numeric(6, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_rate": {
+          "name": "total_rate",
+          "type": "numeric(6, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.cpf_records": {
+      "name": "cpf_records",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "payslip_id": {
+          "name": "payslip_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employee_id": {
+          "name": "employee_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ow_cents": {
+          "name": "ow_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "aw_cents": {
+          "name": "aw_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "ow_capped_cents": {
+          "name": "ow_capped_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "aw_capped_cents": {
+          "name": "aw_capped_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "employer_rate": {
+          "name": "employer_rate",
+          "type": "numeric(6, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employee_rate": {
+          "name": "employee_rate",
+          "type": "numeric(6, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_rate": {
+          "name": "total_rate",
+          "type": "numeric(6, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employer_amount_cents": {
+          "name": "employer_amount_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employee_amount_cents": {
+          "name": "employee_amount_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_amount_cents": {
+          "name": "total_amount_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "age_band": {
+          "name": "age_band",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rate_table": {
+          "name": "rate_table",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ytd_ow_cents": {
+          "name": "ytd_ow_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ytd_aw_cents": {
+          "name": "ytd_aw_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "cpf_records_payslip_id_payslips_id_fk": {
+          "name": "cpf_records_payslip_id_payslips_id_fk",
+          "tableFrom": "cpf_records",
+          "tableTo": "payslips",
+          "columnsFrom": ["payslip_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "cpf_records_employee_id_employees_id_fk": {
+          "name": "cpf_records_employee_id_employees_id_fk",
+          "tableFrom": "cpf_records",
+          "tableTo": "employees",
+          "columnsFrom": ["employee_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.employees": {
+      "name": "employees",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nric_fin_hash": {
+          "name": "nric_fin_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nric_last4": {
+          "name": "nric_last4",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "full_name": {
+          "name": "full_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dob": {
+          "name": "dob",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "gender": {
+          "name": "gender",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nationality": {
+          "name": "nationality",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "citizenship_status": {
+          "name": "citizenship_status",
+          "type": "citizenship_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pr_effective_date": {
+          "name": "pr_effective_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mobile": {
+          "name": "mobile",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "address_encrypted": {
+          "name": "address_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "emergency_contact_name": {
+          "name": "emergency_contact_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "emergency_contact_phone": {
+          "name": "emergency_contact_phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "employee_code": {
+          "name": "employee_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "position": {
+          "name": "position",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "department": {
+          "name": "department",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hire_date": {
+          "name": "hire_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "confirmation_date": {
+          "name": "confirmation_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "probation_end": {
+          "name": "probation_end",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "employment_type": {
+          "name": "employment_type",
+          "type": "employment_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'FT'"
+        },
+        "contract_end_date": {
+          "name": "contract_end_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "termination_date": {
+          "name": "termination_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "termination_reason": {
+          "name": "termination_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bank_json_encrypted": {
+          "name": "bank_json_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cpf_account_number": {
+          "name": "cpf_account_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "work_pass_type": {
+          "name": "work_pass_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "work_pass_expiry": {
+          "name": "work_pass_expiry",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tax_ref_number": {
+          "name": "tax_ref_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "employee_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "employees_company_id_companies_id_fk": {
+          "name": "employees_company_id_companies_id_fk",
+          "tableFrom": "employees",
+          "tableTo": "companies",
+          "columnsFrom": ["company_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.leave_records": {
+      "name": "leave_records",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "employee_id": {
+          "name": "employee_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "leave_type": {
+          "name": "leave_type",
+          "type": "leave_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "start_date": {
+          "name": "start_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "end_date": {
+          "name": "end_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "days": {
+          "name": "days",
+          "type": "numeric(4, 1)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "leave_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "approved_by": {
+          "name": "approved_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "leave_records_employee_id_employees_id_fk": {
+          "name": "leave_records_employee_id_employees_id_fk",
+          "tableFrom": "leave_records",
+          "tableTo": "employees",
+          "columnsFrom": ["employee_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.pay_runs": {
+      "name": "pay_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_start": {
+          "name": "period_start",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_end": {
+          "name": "period_end",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pay_date": {
+          "name": "pay_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "pay_run_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "total_gross_cents": {
+          "name": "total_gross_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_net_cents": {
+          "name": "total_net_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_employer_cpf_cents": {
+          "name": "total_employer_cpf_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_employee_cpf_cents": {
+          "name": "total_employee_cpf_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_sdl_cents": {
+          "name": "total_sdl_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_fwl_cents": {
+          "name": "total_fwl_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approved_by": {
+          "name": "approved_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "paid_at": {
+          "name": "paid_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "pay_runs_company_id_companies_id_fk": {
+          "name": "pay_runs_company_id_companies_id_fk",
+          "tableFrom": "pay_runs",
+          "tableTo": "companies",
+          "columnsFrom": ["company_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.payslips": {
+      "name": "payslips",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "pay_run_id": {
+          "name": "pay_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employee_id": {
+          "name": "employee_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "basic_salary_cents": {
+          "name": "basic_salary_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prorated_days": {
+          "name": "prorated_days",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gross_pay_cents": {
+          "name": "gross_pay_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ot_hours": {
+          "name": "ot_hours",
+          "type": "numeric(6, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ot_pay_cents": {
+          "name": "ot_pay_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "allowances_json": {
+          "name": "allowances_json",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deductions_json": {
+          "name": "deductions_json",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "employer_cpf_cents": {
+          "name": "employer_cpf_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employee_cpf_cents": {
+          "name": "employee_cpf_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sdl_cents": {
+          "name": "sdl_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fwl_cents": {
+          "name": "fwl_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "net_pay_cents": {
+          "name": "net_pay_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employer_total_cost_cents": {
+          "name": "employer_total_cost_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pdf_file_key": {
+          "name": "pdf_file_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "payslips_pay_run_id_pay_runs_id_fk": {
+          "name": "payslips_pay_run_id_pay_runs_id_fk",
+          "tableFrom": "payslips",
+          "tableTo": "pay_runs",
+          "columnsFrom": ["pay_run_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "payslips_employee_id_employees_id_fk": {
+          "name": "payslips_employee_id_employees_id_fk",
+          "tableFrom": "payslips",
+          "tableTo": "employees",
+          "columnsFrom": ["employee_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.salary_records": {
+      "name": "salary_records",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "employee_id": {
+          "name": "employee_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "effective_date": {
+          "name": "effective_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "basic_salary_cents": {
+          "name": "basic_salary_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "allowances_json": {
+          "name": "allowances_json",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ot_eligible": {
+          "name": "ot_eligible",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "ot_rate_multiplier": {
+          "name": "ot_rate_multiplier",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'1.50'"
+        },
+        "aws_months": {
+          "name": "aws_months",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'0'"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "salary_records_employee_id_employees_id_fk": {
+          "name": "salary_records_employee_id_employees_id_fk",
+          "tableFrom": "salary_records",
+          "tableTo": "employees",
+          "columnsFrom": ["employee_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "user_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'employee'"
+        },
+        "totp_secret": {
+          "name": "totp_secret",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "totp_enabled": {
+          "name": "totp_enabled",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'false'"
+        },
+        "employee_id": {
+          "name": "employee_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "users_company_id_companies_id_fk": {
+          "name": "users_company_id_companies_id_fk",
+          "tableFrom": "users",
+          "tableTo": "companies",
+          "columnsFrom": ["company_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_email_unique": {
+          "name": "users_email_unique",
+          "nullsNotDistinct": false,
+          "columns": ["email"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.citizenship_status": {
+      "name": "citizenship_status",
+      "schema": "public",
+      "values": ["SC", "PR1", "PR2", "PR3", "FW"]
+    },
+    "public.cpf_status_type": {
+      "name": "cpf_status_type",
+      "schema": "public",
+      "values": ["SC", "PR1", "PR2", "PR3"]
+    },
+    "public.employee_status": {
+      "name": "employee_status",
+      "schema": "public",
+      "values": ["active", "probation", "terminated"]
+    },
+    "public.employment_type": {
+      "name": "employment_type",
+      "schema": "public",
+      "values": ["FT", "PT", "CONTRACT", "LOCUM"]
+    },
+    "public.leave_status": {
+      "name": "leave_status",
+      "schema": "public",
+      "values": ["pending", "approved", "rejected", "cancelled"]
+    },
+    "public.leave_type": {
+      "name": "leave_type",
+      "schema": "public",
+      "values": [
+        "annual",
+        "sick_outpatient",
+        "sick_hospitalisation",
+        "maternity",
+        "paternity",
+        "childcare",
+        "compassionate",
+        "unpaid",
+        "other"
+      ]
+    },
+    "public.pay_run_status": {
+      "name": "pay_run_status",
+      "schema": "public",
+      "values": ["draft", "calculated", "reviewed", "approved", "paid", "filed"]
+    },
+    "public.user_role": {
+      "name": "user_role",
+      "schema": "public",
+      "values": ["owner", "admin", "employee"]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

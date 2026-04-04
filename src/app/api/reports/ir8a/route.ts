@@ -4,6 +4,7 @@ import { payRuns, payslips, employees, companies } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { requireRole } from "@/lib/auth/session";
 import { generateIr8aXml } from "@/lib/documents/ir8a-xml";
+import { generateIr8aTextFile } from "@/lib/documents/ir8a-text";
 import type { ApiResponse } from "@/types";
 
 /** GET /api/reports/ir8a?year=2025 — Generate IR8A XML file */
@@ -13,6 +14,12 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const yearParam = searchParams.get("year");
     const year = yearParam ? parseInt(yearParam, 10) : new Date().getFullYear() - 1;
+    if (isNaN(year) || year < 2020 || year > 2100) {
+      return NextResponse.json(
+        { success: false, error: "Invalid year parameter" } satisfies ApiResponse,
+        { status: 400 },
+      );
+    }
 
     // Get company details
     const [company] = await db
@@ -67,6 +74,62 @@ export async function GET(request: NextRequest) {
         employees.terminationDate,
       );
 
+    const format = searchParams.get("format") ?? "xml";
+
+    if (format === "text") {
+      // AIS pipe-delimited text file for IRAS submission
+      const textEmployees = employeeData.map((e: (typeof employeeData)[number]) => ({
+        nricLast4: e.nricLast4,
+        fullName: e.employeeName,
+        dob: e.dob,
+        grossSalaryCents: Number(e.totalGrossPayCents),
+        bonusCents: Number(e.totalBonusCents),
+        directorFeeCents: 0,
+        commissionCents: 0,
+        pensionCents: 0,
+        employeeCpfCents: Number(e.totalEmployeeCpfCents),
+        employerCpfCents: Number(e.totalEmployerCpfCents),
+        donationsCents: 0,
+        benefitsInKindCents: 0,
+        excessCpfCents: 0,
+      }));
+
+      const textResult = generateIr8aTextFile({
+        companyUen: company.uen,
+        companyName: company.name,
+        yearOfAssessment: year + 1, // YA = basis year + 1
+        employees: textEmployees,
+      });
+
+      return new NextResponse(textResult.content, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${textResult.filename}"`,
+        },
+      });
+    }
+
+    if (format === "json") {
+      // JSON response with aggregated data
+      const jsonEmployees = employeeData.map((e: (typeof employeeData)[number]) => ({
+        nricLast4: e.nricLast4,
+        employeeName: e.employeeName,
+        dob: e.dob,
+        nationality: e.nationality ?? "Singapore",
+        totalGrossPayCents: Number(e.totalGrossPayCents),
+        totalBonusCents: Number(e.totalBonusCents),
+        totalEmployerCpfCents: Number(e.totalEmployerCpfCents),
+        totalEmployeeCpfCents: Number(e.totalEmployeeCpfCents),
+      }));
+
+      return NextResponse.json({
+        success: true,
+        data: { year, employees: jsonEmployees },
+      } satisfies ApiResponse);
+    }
+
+    // Default: XML format
     const ir8aEmployees = employeeData.map((e: (typeof employeeData)[number]) => ({
       nricLast4: e.nricLast4,
       employeeName: e.employeeName,

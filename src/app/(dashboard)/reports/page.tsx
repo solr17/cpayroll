@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { Card, Button, Modal, PageHeader, EmptyState, Table, Select } from "@/components/ui";
 import { centsToCurrency } from "@/lib/utils/money";
+import { apiFetch } from "@/lib/fetch";
 
 /** Safe currency formatting — coerces to number to prevent NaN from string values */
 function money(cents: unknown): string {
@@ -67,7 +68,11 @@ type ReportType =
   | "cpf-contribution"
   | "statutory-contribution"
   | "variance-report"
-  | "ir8a-summary";
+  | "ir8a-summary"
+  | "bank-file"
+  | "cost-to-company"
+  | "headcount"
+  | "employee-master";
 
 interface ReportCard {
   type: ReportType;
@@ -137,6 +142,30 @@ const REPORTS: ReportCard[] = [
     type: "ir8a-summary",
     name: "IR8A Summary",
     description: "Annual tax filing data per employee",
+    periodType: "year",
+  },
+  {
+    type: "bank-file",
+    name: "Bank File",
+    description: "Payment details by bank with masked accounts",
+    periodType: "month",
+  },
+  {
+    type: "cost-to-company",
+    name: "Cost to Company",
+    description: "Total employer cost per employee incl. statutory",
+    periodType: "month",
+  },
+  {
+    type: "headcount",
+    name: "Headcount",
+    description: "Employee count by status, department, type",
+    periodType: "year",
+  },
+  {
+    type: "employee-master",
+    name: "Employee Master",
+    description: "Full employee roster with non-sensitive fields",
     periodType: "year",
   },
 ];
@@ -450,6 +479,226 @@ function generateReconciliation(
 }
 
 // ---------------------------------------------------------------------------
+// New report generators (API-backed)
+// ---------------------------------------------------------------------------
+
+interface BankFileData {
+  banks: Array<{
+    bankName: string;
+    employeeCount: number;
+    totalNetPayCents: number;
+    employees: Array<{
+      employeeName: string;
+      nricLast4: string;
+      accountMasked: string;
+      netPayCents: number;
+    }>;
+  }>;
+  grandTotalCents: number;
+}
+
+function generateBankFileReport(data: BankFileData): { headers: string[]; rows: ReportRow[] } {
+  const headers = ["Bank", "Employee", "NRIC", "Account", "Net Pay"];
+  const rows: ReportRow[] = [];
+
+  for (const bank of data.banks) {
+    for (const emp of bank.employees) {
+      rows.push({
+        Bank: bank.bankName,
+        Employee: emp.employeeName,
+        NRIC: `****${emp.nricLast4}`,
+        Account: emp.accountMasked,
+        "Net Pay": money(emp.netPayCents),
+      });
+    }
+    // Bank subtotal row
+    rows.push({
+      Bank: `${bank.bankName} SUBTOTAL`,
+      Employee: `${bank.employeeCount} employees`,
+      NRIC: "",
+      Account: "",
+      "Net Pay": money(bank.totalNetPayCents),
+    });
+  }
+
+  // Grand total
+  rows.push({
+    Bank: "GRAND TOTAL",
+    Employee: "",
+    NRIC: "",
+    Account: "",
+    "Net Pay": money(data.grandTotalCents),
+  });
+
+  return { headers, rows };
+}
+
+interface CtcRow {
+  employeeName: string;
+  nricLast4: string;
+  department: string;
+  grossPayCents: number;
+  employerCpfCents: number;
+  sdlCents: number;
+  fwlCents: number;
+  shgCents: number;
+  totalCostCents: number;
+}
+
+interface CtcData {
+  rows: CtcRow[];
+  totals: {
+    grossPayCents: number;
+    employerCpfCents: number;
+    sdlCents: number;
+    fwlCents: number;
+    shgCents: number;
+    employerTotalCostCents: number;
+  };
+}
+
+function generateCostToCompanyReport(data: CtcData): { headers: string[]; rows: ReportRow[] } {
+  const headers = [
+    "Employee",
+    "Department",
+    "Gross Pay",
+    "Employer CPF",
+    "SDL",
+    "FWL",
+    "SHG",
+    "Total Cost",
+  ];
+  const rows: ReportRow[] = data.rows.map((r: CtcRow) => ({
+    Employee: r.employeeName,
+    Department: r.department,
+    "Gross Pay": money(r.grossPayCents),
+    "Employer CPF": money(r.employerCpfCents),
+    SDL: money(r.sdlCents),
+    FWL: money(r.fwlCents),
+    SHG: money(r.shgCents),
+    "Total Cost": money(r.totalCostCents),
+  }));
+
+  // Totals row
+  rows.push({
+    Employee: "TOTAL",
+    Department: "",
+    "Gross Pay": money(data.totals.grossPayCents),
+    "Employer CPF": money(data.totals.employerCpfCents),
+    SDL: money(data.totals.sdlCents),
+    FWL: money(data.totals.fwlCents),
+    SHG: money(data.totals.shgCents),
+    "Total Cost": money(data.totals.employerTotalCostCents),
+  });
+
+  return { headers, rows };
+}
+
+interface HeadcountData {
+  totalEmployees: number;
+  byStatus: Array<{ status: string; count: number }>;
+  byDepartment: Array<{ department: string; count: number }>;
+  byEmploymentType: Array<{ type: string; count: number }>;
+}
+
+function generateHeadcountReport(data: HeadcountData): { headers: string[]; rows: ReportRow[] } {
+  const headers = ["Category", "Group", "Count"];
+  const rows: ReportRow[] = [];
+
+  rows.push({ Category: "TOTAL", Group: "All Employees", Count: data.totalEmployees });
+  rows.push({ Category: "", Group: "", Count: "" });
+
+  for (const item of data.byStatus) {
+    rows.push({ Category: "By Status", Group: item.status, Count: item.count });
+  }
+  rows.push({ Category: "", Group: "", Count: "" });
+
+  for (const item of data.byDepartment) {
+    rows.push({ Category: "By Department", Group: item.department, Count: item.count });
+  }
+  rows.push({ Category: "", Group: "", Count: "" });
+
+  for (const item of data.byEmploymentType) {
+    const labels: Record<string, string> = {
+      FT: "Full-Time",
+      PT: "Part-Time",
+      CONTRACT: "Contract",
+      LOCUM: "Locum",
+    };
+    rows.push({
+      Category: "By Employment Type",
+      Group: labels[item.type] ?? item.type,
+      Count: item.count,
+    });
+  }
+
+  return { headers, rows };
+}
+
+interface EmployeeMasterRow {
+  fullName: string;
+  nricDisplay: string;
+  department: string;
+  position: string;
+  hireDate: string;
+  status: string;
+  employmentType: string;
+  citizenshipStatus: string;
+  basicSalaryCents: number | null;
+}
+
+interface EmployeeMasterData {
+  rows: EmployeeMasterRow[];
+  totalCount: number;
+}
+
+function generateEmployeeMasterReport(data: EmployeeMasterData): {
+  headers: string[];
+  rows: ReportRow[];
+} {
+  const headers = [
+    "Name",
+    "NRIC",
+    "Department",
+    "Position",
+    "Hire Date",
+    "Status",
+    "Employment Type",
+    "Citizenship",
+    "Basic Salary",
+  ];
+
+  const typeLabels: Record<string, string> = {
+    FT: "Full-Time",
+    PT: "Part-Time",
+    CONTRACT: "Contract",
+    LOCUM: "Locum",
+  };
+
+  const citizenLabels: Record<string, string> = {
+    SC: "SG Citizen",
+    PR1: "PR Year 1",
+    PR2: "PR Year 2",
+    PR3: "PR Year 3+",
+    FW: "Foreign Worker",
+  };
+
+  const rows: ReportRow[] = data.rows.map((r: EmployeeMasterRow) => ({
+    Name: r.fullName,
+    NRIC: r.nricDisplay,
+    Department: r.department,
+    Position: r.position,
+    "Hire Date": r.hireDate,
+    Status: r.status,
+    "Employment Type": typeLabels[r.employmentType] ?? r.employmentType,
+    Citizenship: citizenLabels[r.citizenshipStatus] ?? r.citizenshipStatus,
+    "Basic Salary": r.basicSalaryCents != null ? money(r.basicSalaryCents) : "-",
+  }));
+
+  return { headers, rows };
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -482,7 +731,7 @@ export default function ReportsPage() {
   // Fetch all pay runs then filter by period
   const fetchPayRunsForPeriod = useCallback(
     async (year: string, month?: string): Promise<PayRun[]> => {
-      const res = await fetch("/api/payroll/pay-runs");
+      const res = await apiFetch("/api/payroll/pay-runs");
       const data = await res.json();
       if (!data.success) throw new Error(data.error ?? "Failed to fetch pay runs");
 
@@ -561,6 +810,16 @@ export default function ReportsPage() {
     [],
   );
 
+  // Helper: get the first pay run ID for a given period (used by API-backed reports)
+  const getPayRunIdForPeriod = useCallback(
+    async (year: string, month: string): Promise<string> => {
+      const runs = await fetchPayRunsForPeriod(year, month);
+      if (runs.length === 0) throw new Error("No pay run found for the selected period");
+      return runs[0]!.id;
+    },
+    [fetchPayRunsForPeriod],
+  );
+
   const handleGenerate = useCallback(async () => {
     if (!selectedReport) return;
     setLoading(true);
@@ -632,6 +891,41 @@ export default function ReportsPage() {
           result = generateReconciliation(currentSlips, previousSlips);
           break;
         }
+        case "bank-file": {
+          const apiRes = await fetch(
+            `/api/reports?type=bank_file&payRunId=${await getPayRunIdForPeriod(selectedYear, selectedMonth)}`,
+          );
+          const apiData = await apiRes.json();
+          if (!apiData.success)
+            throw new Error(apiData.error ?? "Failed to fetch bank file report");
+          result = generateBankFileReport(apiData.data);
+          break;
+        }
+        case "cost-to-company": {
+          const apiRes = await fetch(
+            `/api/reports?type=cost_to_company&payRunId=${await getPayRunIdForPeriod(selectedYear, selectedMonth)}`,
+          );
+          const apiData = await apiRes.json();
+          if (!apiData.success) throw new Error(apiData.error ?? "Failed to fetch CTC report");
+          result = generateCostToCompanyReport(apiData.data);
+          break;
+        }
+        case "headcount": {
+          const apiRes = await fetch(`/api/reports?type=headcount`);
+          const apiData = await apiRes.json();
+          if (!apiData.success)
+            throw new Error(apiData.error ?? "Failed to fetch headcount report");
+          result = generateHeadcountReport(apiData.data);
+          break;
+        }
+        case "employee-master": {
+          const apiRes = await fetch(`/api/reports?type=employee_master`);
+          const apiData = await apiRes.json();
+          if (!apiData.success)
+            throw new Error(apiData.error ?? "Failed to fetch employee master report");
+          result = generateEmployeeMasterReport(apiData.data);
+          break;
+        }
         default:
           throw new Error("Unknown report type");
       }
@@ -650,7 +944,14 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedReport, selectedYear, selectedMonth, fetchAllPayslipsForPeriod, getPreviousMonth]);
+  }, [
+    selectedReport,
+    selectedYear,
+    selectedMonth,
+    fetchAllPayslipsForPeriod,
+    getPreviousMonth,
+    getPayRunIdForPeriod,
+  ]);
 
   const handleExportCsv = useCallback(() => {
     if (reportHeaders.length === 0 || reportRows.length === 0) return;

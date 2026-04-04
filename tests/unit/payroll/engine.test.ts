@@ -23,6 +23,8 @@ function makeInput(overrides: Partial<EmployeePayrollInput> = {}): EmployeePayro
     hireDate: "2024-01-01",
     terminationDate: null,
     fwlRateCents: 0,
+    shgFundType: "CDAC",
+    shgOptedOut: false,
     variableItems: {
       otHours: 0,
       bonusCents: 0,
@@ -65,8 +67,12 @@ describe("payroll engine", () => {
       // FWL: 0 for SC
       expect(result.fwl.fwlCents).toBe(0);
 
-      // Net = 5000 - 1000 (employee CPF) = 4000
-      expect(result.netPayCents).toBe(400000);
+      // SHG: CDAC for $5,000 wages = $3.00
+      expect(result.shg.fundType).toBe("CDAC");
+      expect(result.shg.contributionCents).toBe(300);
+
+      // Net = 5000 - 1000 (employee CPF) - 3 (CDAC) = 3997
+      expect(result.netPayCents).toBe(399700);
 
       // Employer cost = 5000 + 850 + 11.25 = 5861.25
       expect(result.employerTotalCostCents).toBe(586125);
