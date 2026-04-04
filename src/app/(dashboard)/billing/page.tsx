@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, Button, PageHeader, Spinner } from "@/components/ui";
 import { apiFetch } from "@/lib/fetch";
@@ -108,6 +108,20 @@ const STRIPE_PRICE_IDS: Record<string, string> = {
 };
 
 export default function BillingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center p-12">
+          <Spinner />
+        </div>
+      }
+    >
+      <BillingContent />
+    </Suspense>
+  );
+}
+
+function BillingContent() {
   const searchParams = useSearchParams();
   const [billing, setBilling] = useState<BillingInfo | null>(null);
   const [loading, setLoading] = useState(true);

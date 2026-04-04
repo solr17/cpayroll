@@ -1,12 +1,10 @@
 import pino from "pino";
 
+const VALID_LEVELS = ["trace", "debug", "info", "warn", "error", "fatal"];
+const level = VALID_LEVELS.includes(process.env.LOG_LEVEL ?? "") ? process.env.LOG_LEVEL! : "info";
+
 const logger = pino({
-  level: process.env.LOG_LEVEL || "info",
-  ...(process.env.NODE_ENV !== "production"
-    ? {
-        transport: { target: "pino/file", options: { destination: 1 } }, // stdout in dev
-      }
-    : {}),
+  level,
   redact: {
     paths: [
       "password",
