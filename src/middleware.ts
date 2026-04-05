@@ -181,6 +181,8 @@ function addSecurityHeaders(response: NextResponse): void {
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
 }
 
+export const runtime = "nodejs";
+
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
